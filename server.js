@@ -4,10 +4,16 @@ const axios = require('axios');
 const cors = require('cors');
 const crypto = require('crypto');
 
-const app = express();
+const app = express(); // 🟢 ត្រូវប្រកាស app មុនគេបង្អស់
+
 app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
+
+// 🟢 Test Route សម្រាប់ពិនិត្យមើលថា Server ដំណើរការ
+app.get('/', (req, res) => {
+    res.send('FAFA Clothing Backend is running successfully!');
+});
 
 // 🟢 ព័ត៌មាន ABA PayWay Sandbox Credentials
 const PAYWAY_MERCHANT_ID = 'ec480288';[cite: 1]
@@ -68,7 +74,7 @@ app.post('/api/payway-webhook', async (req, res) => {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
 
-            let orderText = "🎉 *การបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
+            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
             orderInfo.cart.forEach((item, index) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });

@@ -4,7 +4,7 @@ const axios = require('axios');
 const cors = require('cors');
 const crypto = require('crypto');
 
-const app = express(); // 🟢 ត្រូវប្រកាស app មុនគេបង្អស់
+const app = express();
 
 app.use(cors());
 app.use(bodyParser.json());
@@ -16,9 +16,9 @@ app.get('/', (req, res) => {
 });
 
 // 🟢 ព័ត៌មាន ABA PayWay Sandbox Credentials
-const PAYWAY_MERCHANT_ID = 'ec480288';[cite: 1]
-const PAYWAY_API_KEY = 'D6A95A5622C6F2650D474712EA8294DA4130A7FE';[cite: 1]
-const PAYWAY_API_URL = 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase';[cite: 1]
+const PAYWAY_MERCHANT_ID = 'ec480288';
+const PAYWAY_API_KEY = 'D6A95A5622C6F2650D474712EA8294DA4130A7FE';
+const PAYWAY_API_URL = 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase';
 
 // ព័ត៌មាន Telegram Bot
 const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';

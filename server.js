@@ -26,12 +26,34 @@ const TELEGRAM_CHAT_ID = '7488093549';
 
 let ordersDatabase = {};
 
-function createHash(merchant_id, tran_id, amount, req_time, api_key) {
-    const str = merchant_id + tran_id + amount + req_time;
+// 🟢 ហ្វុងស៉ីនបង្កើត Hash ត្រឹមត្រូវតាមស្ដង់ដារ ABA PayWay v3 Purchase API
+function createHash(req_time, merchant_id, tran_id, amount, items, api_key) {
+    // ABA PayWay v3 Purchase API Hash String Format:
+    // req_time + merchant_id + tran_id + amount + items
+    const str = req_time + merchant_id + tran_id + amount + items;
     return crypto.createHmac('sha512', api_key).update(str).digest('base64');
 }
 
-// 1️⃣ API សម្រាប់สร้าง Auto-Submit Form ផ្ញើទៅ ABA PayWay (แก้ปัญหา Error 405)
+// Helper សម្រាប់แปลง cart ទៅជា Base64 items string តាមស្ដង់ដារ ABA
+function getBase64Items(cart, shippingFee) {
+    let itemsList = cart.map(item => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: item.price
+    }));
+
+    if (shippingFee > 0) {
+        itemsList.push({
+            name: "Express Shipping",
+            quantity: 1,
+            price: parseFloat(shippingFee)
+        });
+    }
+
+    return Buffer.from(JSON.stringify(itemsList)).toString('base64');
+}
+
+// 1️⃣ API សម្រាប់สร้าง Auto-Submit Form ផ្ញើទៅ ABA PayWay
 app.post('/api/create-order', async (req, res) => {
     try {
         const { orderId, amount, phone, address, shippingFee, cart } = req.body;
@@ -47,15 +69,18 @@ app.post('/api/create-order', async (req, res) => {
         };
 
         const req_time = Math.floor(Date.now() / 1000).toString();
-        const hash = createHash(PAYWAY_MERCHANT_ID, orderId, amount, req_time, PAYWAY_API_KEY);
+        const itemsBase64 = getBase64Items(cart, shippingFee);
+        
+        // គណនា Hash ជាមួយ items
+        const hash = createHash(req_time, PAYWAY_MERCHANT_ID, orderId, amount, itemsBase64, PAYWAY_API_KEY);
 
-        // ส่งกลับมาเป็น Checkout URL ຜ່ານ Form Auto-submit ជំនួសវិញ
         res.json({ 
             success: true, 
             merchant_id: PAYWAY_MERCHANT_ID,
             req_time: req_time,
             tran_id: orderId,
             amount: amount,
+            items: itemsBase64,
             hash: hash,
             actionUrl: PAYWAY_API_URL
         });
@@ -75,7 +100,7 @@ app.post('/api/payway-webhook', async (req, res) => {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
 
-            let orderText = "🎉 *การបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
+            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
             orderInfo.cart.forEach((item, index) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });

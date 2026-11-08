@@ -7,11 +7,12 @@ const crypto = require('crypto'); // ប្រើសម្រាប់បង្�
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
 
 // 🟢 ព័ត៌មាន ABA PayWay Sandbox Credentials របស់អ្នក
-const PAYWAY_MERCHANT_ID = 'ec480288';[cite: 1]
-const PAYWAY_API_KEY = 'D6A95A5622C6F2650D474712EA8294DA4130A7FE';[cite: 1]
-const PAYWAY_API_URL = 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase';[cite: 1]
+const PAYWAY_MERCHANT_ID = 'ec480288';
+const PAYWAY_API_KEY = 'D6A95A5622C6F2650D474712EA8294DA4130A7FE';
+const PAYWAY_API_URL = 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase';
 
 // ព័ត៌មាន Telegram Bot របស់អ្នក
 const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';
@@ -21,12 +22,12 @@ let ordersDatabase = {};
 
 // មុខងារសម្រាប់បង្កើត Hash (SHA512) តាមស្តង់ដារ ABA PayWay API
 function createHash(merchant_id, tran_id, amount, req_time, api_key) {
-    // ស្ដង់ដារ ABA PayWay Hash string: merchant_id + tran_id + amount + req_time (និង option ផ្សេងៗបើមាន)
+    // ស្ដង់ដារ ABA PayWay Hash string: merchant_id + tran_id + amount + req_time
     const str = merchant_id + tran_id + amount + req_time;
     return crypto.createHmac('sha512', api_key).update(str).digest('base64');
 }
 
-// 1️⃣ API សម្រាប់បង្កើត Order និងផ្ញើសំណើទៅ ABA PayWay ដើម្បីបង្កើត QR Transaction
+// 1️⃣ API សម្រាប់បង្កើត Order និងផ្ញើសំណើទៅ ABA PayWay ដើម្បីបង្កើត Transaction
 app.post('/api/create-order', async (req, res) => {
     try {
         const { orderId, amount, phone, address, shippingFee, cart } = req.body;
@@ -45,20 +46,18 @@ app.post('/api/create-order', async (req, res) => {
         const req_time = Math.floor(Date.now() / 1000).toString();
         const hash = createHash(PAYWAY_MERCHANT_ID, orderId, amount, req_time, PAYWAY_API_KEY);
 
-        // 🟢 ส่งសំណើទៅកាន់ ABA PayWay Sandbox API ផ្លូវការ
-        // (ចំណាំ៖ អាស្រ័យលើប្រភេទ API របស់ ABA បើទាមទਾਰ Form-Data ឬ JSON អាចកែសម្រួលតាមតម្រូវការ)
-        const paywayResponse = await axios.post(PAYWAY_API_URL, {
-            merchant_id: PAYWAY_MERCHANT_ID,
-            req_time: req_time,
-            tran_id: orderId,
-            amount: amount,
-            hash: hash,
-            continue_success_url: '',
-            return_url: '',
-            items: cart.map(i => `${i.name} x ${i.quantity}`).join(', ')
-        }, {
+        // រៀបចំទម្រង់ទិន្នន័យផ្ញើទៅ ABA PayWay (Sandbox) ជា Form URL Encoded តាមស្ដង់ដារ ABA
+        const params = new URLSearchParams();
+        params.append('merchant_id', PAYWAY_MERCHANT_ID);
+        params.append('req_time', req_time);
+        params.append('tran_id', orderId);
+        params.append('amount', amount);
+        params.append('hash', hash);
+        params.append('items', cart.map(i => `${i.name} x ${i.quantity}`).join(', '));
+
+        const paywayResponse = await axios.post(PAYWAY_API_URL, params, {
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/x-www-form-urlencoded'
             }
         });
 
@@ -106,6 +105,7 @@ app.post('/api/payway-webhook', async (req, res) => {
 
         res.json({ status: 'success' });
     } catch (error) {
+        console.error("Webhook Error:", error);
         res.status(500).json({ status: 'error', message: error.message });
     }
 });

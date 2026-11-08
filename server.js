@@ -16,9 +16,26 @@ app.get('/', (req, res) => {
 const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';
 const TELEGRAM_CHAT_ID = '7488093549';
 
+// 🟢 ទុកបញ្ជីផលិតផលនិងស្តុកនៅលើ Server ផ្ទាល់
+let products = [
+    { id: 1, name: "អាវយឺត FREE SIZE", price: 0.05, stock: 5, image: "https://i.postimg.cc/0NrGyrGt/858535232-122143330293104345-8003998162307616562-n.jpg" },
+    { id: 2, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 3, image: "https://i.postimg.cc/HkY4F6rY/858998600-122143328523104345-9154920380344446311-n.jpg" },
+    { id: 3, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 2, image: "https://i.postimg.cc/T1R3T7By/859090829-122143330215104345-4641336911256672944-n.jpg" },
+    { id: 4, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 4, image: "https://i.postimg.cc/k4CnyYJL/859396177-122143328499104345-4898313489564552661-n.jpg" },
+    { id: 5, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/kG1qqnQn/859396179-122143328535104345-7526329722242687048-n.jpg" },
+    { id: 6, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 6, image: "https://i.postimg.cc/sXKR4V0f/859784793-122143328547104345-5525957976114747478-n.jpg" },
+    { id: 7, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 0, image: "https://i.postimg.cc/brJf6KKV/859980286-122143330197104345-5978106523108566575-n.jpg" },
+    { id: 8, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 0, image: "https://i.postimg.cc/XqzStsWV/863325406-122143330281104345-4670333600097983632-n.jpg" }
+];
+
 let ordersDatabase = {};
 
-// API ទទួលការបញ្ជាទិញ និងរក្សាទុកទិន្នន័យ
+// API សម្រាប់ Frontend ទាញយកទិន្នន័យផលិតផលនិងស្តុកចុងក្រោយ
+app.get('/api/products', (req, res) => {
+    res.json(products);
+});
+
+// API ទទួលការបញ្ជាទិញ
 app.post('/api/create-order', async (req, res) => {
     try {
         let { orderId, amount, phone, address, shippingFee, cart } = req.body;
@@ -34,12 +51,9 @@ app.post('/api/create-order', async (req, res) => {
             status: 'PENDING'
         };
 
-        // ផ្ដល់ព័ត៌មានគណនី ABA ផ្ទាល់ខ្លួនត្រឡប់ទៅ Frontend ដើម្បីបង្កើត QR Code
         res.json({
             success: true,
             tran_id: orderId,
-            accountName: 'SRY VANDY',
-            accountNumber: '500258373',
             amount: amount
         });
 
@@ -49,7 +63,7 @@ app.post('/api/create-order', async (req, res) => {
     }
 });
 
-// API បញ្ជាក់ការបង់ប្រាក់ និងផ្ញើសារចូល Telegram របស់អ្នក
+// API បញ្ជាក់ការបង់ប្រាក់ និងកាត់ស្តុកលើ Server ផ្ទាល់
 app.post('/api/confirm-payment', async (req, res) => {
     try {
         const { tran_id } = req.body;
@@ -57,6 +71,14 @@ app.post('/api/confirm-payment', async (req, res) => {
         if (ordersDatabase[tran_id]) {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
+
+            // 🟢 កាត់ស្តុកនៅលើ Server យ៉ាងពិតប្រាកដ
+            orderInfo.cart.forEach(cartItem => {
+                let product = products.find(p => p.id === cartItem.id);
+                if (product) {
+                    product.stock = Math.max(0, product.stock - cartItem.quantity);
+                }
+            });
 
             let orderText = "🎉 *ការបញ្ជាទិញថ្មី (បង់ប្រាក់រួចរាល់)!*\n\n";
             orderInfo.cart.forEach((item, index) => {
@@ -68,7 +90,7 @@ app.post('/api/confirm-payment', async (req, res) => {
             orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
             orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
             orderText += `\n🏦 *គណនី ABA:* SRY VANDY (500258373)`;
-            orderText += `\n✅ *ស្ថានភាព:* អតិថិជនបានបញ្ជាក់ការបង់ប្រាក់`;
+            orderText += `\n✅ *ស្ថានភាព:* អតិថិជនបានបញ្ជាក់ការបង់ប្រាក់ (កាត់ស្តុកជោគជ័យ)`;
 
             await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 chat_id: TELEGRAM_CHAT_ID,
@@ -76,7 +98,7 @@ app.post('/api/confirm-payment', async (req, res) => {
                 parse_mode: 'Markdown'
             });
 
-            return res.json({ success: true });
+            return res.json({ success: true, products });
         }
 
         res.json({ success: false, message: 'Order not found' });

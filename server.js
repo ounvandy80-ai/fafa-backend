@@ -27,7 +27,7 @@ function createHash(merchant_id, tran_id, amount, req_time, api_key) {
     return crypto.createHmac('sha512', api_key).update(str).digest('base64');
 }
 
-// 1️⃣ API សម្រាប់បង្កើត Order និងផ្ញើសំណើទៅ ABA PayWay ដើម្បីបង្កើត Transaction
+// 1️⃣ API សម្រាប់បង្កើត Checkout Link ផ្ញើឱ្យ Frontend យកទៅ Redirect
 app.post('/api/create-order', async (req, res) => {
     try {
         const { orderId, amount, phone, address, shippingFee, cart } = req.body;
@@ -46,31 +46,19 @@ app.post('/api/create-order', async (req, res) => {
         const req_time = Math.floor(Date.now() / 1000).toString();
         const hash = createHash(PAYWAY_MERCHANT_ID, orderId, amount, req_time, PAYWAY_API_KEY);
 
-        // រៀបចំទម្រង់ទិន្នន័យផ្ញើទៅ ABA PayWay (Sandbox) ជា Form URL Encoded តាមស្ដង់ដារ ABA
-        const params = new URLSearchParams();
-        params.append('merchant_id', PAYWAY_MERCHANT_ID);
-        params.append('req_time', req_time);
-        params.append('tran_id', orderId);
-        params.append('amount', amount);
-        params.append('hash', hash);
-        params.append('items', cart.map(i => `${i.name} x ${i.quantity}`).join(', '));
-
-        const paywayResponse = await axios.post(PAYWAY_API_URL, params, {
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            }
-        });
+        // បង្កើត Checkout URL សម្រាប់បញ្ជូនអតិថិជនទៅកាន់ទំព័រទូទាត់របស់ ABA PayWay
+        const checkoutUrl = `${PAYWAY_API_URL}?merchant_id=${PAYWAY_MERCHANT_ID}&req_time=${req_time}&tran_id=${orderId}&amount=${amount}&hash=${encodeURIComponent(hash)}`;
 
         // ส่ง Response กลับไปให้ Frontend (Mini App)
         res.json({ 
             success: true, 
-            message: "Order created successfully with ABA PayWay", 
+            message: "Checkout URL generated successfully", 
             orderId,
-            paywayData: paywayResponse.data 
+            checkoutUrl: checkoutUrl 
         });
 
     } catch (error) {
-        console.error("ABA API Error:", error.response?.data || error.message);
+        console.error("ABA API Error:", error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 });
@@ -84,7 +72,7 @@ app.post('/api/payway-webhook', async (req, res) => {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
 
-            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
+            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!* (Redirect)\n\n";
             orderInfo.cart.forEach((item, index) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });

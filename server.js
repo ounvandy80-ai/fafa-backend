@@ -10,7 +10,7 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// 🟢 Test Route សម្រាប់ពិនិត្យមើលថា Server ដំណើរការ
+// Test Route
 app.get('/', (req, res) => {
     res.send('FAFA Clothing Backend is running successfully!');
 });
@@ -31,7 +31,7 @@ function createHash(merchant_id, tran_id, amount, req_time, api_key) {
     return crypto.createHmac('sha512', api_key).update(str).digest('base64');
 }
 
-// 1️⃣ API សម្រាប់បង្កើត Checkout URL ផ្ញើឱ្យ Frontend
+// 1️⃣ API សម្រាប់สร้าง Auto-Submit Form ផ្ញើទៅ ABA PayWay (แก้ปัญหา Error 405)
 app.post('/api/create-order', async (req, res) => {
     try {
         const { orderId, amount, phone, address, shippingFee, cart } = req.body;
@@ -49,14 +49,15 @@ app.post('/api/create-order', async (req, res) => {
         const req_time = Math.floor(Date.now() / 1000).toString();
         const hash = createHash(PAYWAY_MERCHANT_ID, orderId, amount, req_time, PAYWAY_API_KEY);
 
-        // បង្កើត Checkout URL សម្រាប់ Redirect ទៅកាន់ ABA
-        const checkoutUrl = `${PAYWAY_API_URL}?merchant_id=${PAYWAY_MERCHANT_ID}&req_time=${req_time}&tran_id=${orderId}&amount=${amount}&hash=${encodeURIComponent(hash)}`;
-
+        // ส่งกลับมาเป็น Checkout URL ຜ່ານ Form Auto-submit ជំនួសវិញ
         res.json({ 
             success: true, 
-            message: "Checkout URL generated successfully", 
-            orderId,
-            checkoutUrl: checkoutUrl 
+            merchant_id: PAYWAY_MERCHANT_ID,
+            req_time: req_time,
+            tran_id: orderId,
+            amount: amount,
+            hash: hash,
+            actionUrl: PAYWAY_API_URL
         });
 
     } catch (error) {
@@ -74,7 +75,7 @@ app.post('/api/payway-webhook', async (req, res) => {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
 
-            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
+            let orderText = "🎉 *การបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
             orderInfo.cart.forEach((item, index) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });

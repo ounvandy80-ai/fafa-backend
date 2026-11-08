@@ -2,7 +2,6 @@ const express = require('express');
 const bodyParser = require('body-parser');
 const axios = require('axios');
 const cors = require('cors');
-const crypto = require('crypto');
 
 const app = express();
 
@@ -14,41 +13,12 @@ app.get('/', (req, res) => {
     res.send('FAFA Clothing Backend is running successfully!');
 });
 
-const PAYWAY_MERCHANT_ID = 'ec480288';
-const PAYWAY_API_KEY = 'D6A95A5622C6F2650D474712EA8294DA4130A7FE';
-const PAYWAY_API_URL = 'https://checkout-sandbox.payway.com.kh/api/payment-gateway/v1/payments/purchase';
-
 const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';
 const TELEGRAM_CHAT_ID = '7488093549';
 
 let ordersDatabase = {};
 
-function createHash(req_time, merchant_id, tran_id, amount, items, api_key) {
-    const str = req_time + merchant_id + tran_id + amount + items;
-    return crypto.createHmac('sha512', api_key).update(str).digest('base64');
-}
-
-function getBase64Items(cart, shippingFee) {
-    let cartArray = typeof cart === 'string' ? JSON.parse(cart) : cart;
-
-    let itemsList = cartArray.map(item => ({
-        name: item.name,
-        quantity: item.quantity,
-        price: item.price
-    }));
-
-    if (shippingFee > 0) {
-        itemsList.push({
-            name: "Express Shipping",
-            quantity: 1,
-            price: parseFloat(shippingFee)
-        });
-    }
-
-    return Buffer.from(JSON.stringify(itemsList)).toString('base64');
-}
-
-// 🟢 1️⃣ API សម្រាប់ហៅទៅ ABA PayWay ដើម្បីយក QR Code មកបង្ហាញលើ Mini App
+// API ទទួលការបញ្ជាទិញ និងរក្សាទុកទិន្នន័យ
 app.post('/api/create-order', async (req, res) => {
     try {
         let { orderId, amount, phone, address, shippingFee, cart } = req.body;
@@ -64,37 +34,14 @@ app.post('/api/create-order', async (req, res) => {
             status: 'PENDING'
         };
 
-        const req_time = Math.floor(Date.now() / 1000).toString();
-        const itemsBase64 = getBase64Items(parsedCart, shippingFee);
-        const hash = createHash(req_time, PAYWAY_MERCHANT_ID, orderId, amount, itemsBase64, PAYWAY_API_KEY);
-
-        // រៀបចំទិន្នន័យផ្ញើទៅ ABA PayWay API ເພື່ອຂໍ QR Code
-        const params = new URLSearchParams();
-        params.append('req_time', req_time);
-        params.append('merchant_id', PAYWAY_MERCHANT_ID);
-        params.append('tran_id', orderId);
-        params.append('amount', amount);
-        params.append('items', itemsBase64);
-        params.append('hash', hash);
-        params.append('type', 'qr'); // 🟢 កំណត់ type ជា qr ដើម្បីឱ្យ ABA បង្កើត QR មកវិញ
-
-        const response = await axios.post(PAYWAY_API_URL, params, {
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        // ផ្ដល់ព័ត៌មានគណនី ABA ផ្ទាល់ខ្លួនត្រឡប់ទៅ Frontend ដើម្បីបង្កើត QR Code
+        res.json({
+            success: true,
+            tran_id: orderId,
+            accountName: 'SRY VANDY',
+            accountNumber: '500258373',
+            amount: amount
         });
-
-        const result = response.data;
-
-        if (result.status && result.status.code === '00') {
-            // 🟢 ส่งข้อมูล QR Image กลับទៅ Frontend ជា JSON
-            res.json({
-                success: true,
-                qrImage: result.qrImage, 
-                qrString: result.qrString,
-                tran_id: orderId
-            });
-        } else {
-            res.json({ success: false, message: result.status.message || 'Failed to generate QR' });
-        }
 
     } catch (error) {
         console.error("Server Error:", error.message);
@@ -102,16 +49,16 @@ app.post('/api/create-order', async (req, res) => {
     }
 });
 
-// 2️⃣ ABA PayWay Webhook Endpoint
-app.post('/api/payway-webhook', async (req, res) => {
+// API បញ្ជាក់ការបង់ប្រាក់ និងផ្ញើសារចូល Telegram របស់អ្នក
+app.post('/api/confirm-payment', async (req, res) => {
     try {
-        const { tran_id, status } = req.body;
+        const { tran_id } = req.body;
 
-        if (ordersDatabase[tran_id] && (status === '0' || status === 'success')) {
+        if (ordersDatabase[tran_id]) {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
 
-            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA (ABA QR)!*\n\n";
+            let orderText = "🎉 *ការបញ្ជាទិញថ្មី (បង់ប្រាក់រួចរាល់)!*\n\n";
             orderInfo.cart.forEach((item, index) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });
@@ -119,20 +66,23 @@ app.post('/api/payway-webhook', async (req, res) => {
             orderText += `\n📦 *សេវាដឹកជញ្ជូន:* $${orderInfo.shippingFee}`;
             orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
             orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
-            orderText += `\n💰 *ទឹកប្រាក់បានបង់សរុប:* **$${orderInfo.amount}**`;
-            orderText += `\n✅ *ស្ថានភាព:* បង់ប្រាក់ជោគជ័យ (ABA Sandbox Verified)`;
+            orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
+            orderText += `\n🏦 *គណនី ABA:* SRY VANDY (500258373)`;
+            orderText += `\n✅ *ស្ថានភាព:* អតិថិជនបានបញ្ជាក់ការបង់ប្រាក់`;
 
             await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 chat_id: TELEGRAM_CHAT_ID,
                 text: orderText,
                 parse_mode: 'Markdown'
             });
+
+            return res.json({ success: true });
         }
 
-        res.json({ status: 'success' });
+        res.json({ success: false, message: 'Order not found' });
     } catch (error) {
-        console.error("Webhook Error:", error);
-        res.status(500).json({ status: 'error', message: error.message });
+        console.error("Confirmation Error:", error);
+        res.status(500).json({ success: false, message: error.message });
     }
 });
 

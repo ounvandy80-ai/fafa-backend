@@ -29,7 +29,10 @@ function createHash(req_time, merchant_id, tran_id, amount, items, api_key) {
 }
 
 function getBase64Items(cart, shippingFee) {
-    let itemsList = cart.map(item => ({
+    // 🟢 ពិនិត្យនិង Parse cart ប្រសិនបើវាជា String
+    let cartArray = typeof cart === 'string' ? JSON.parse(cart) : cart;
+
+    let itemsList = cartArray.map(item => ({
         name: item.name,
         quantity: item.quantity,
         price: item.price
@@ -46,26 +49,27 @@ function getBase64Items(cart, shippingFee) {
     return Buffer.from(JSON.stringify(itemsList)).toString('base64');
 }
 
-// 🟢 1️⃣ ប្តូរមកជាការ Render HTML Auto-Submit Form ពី Server ផ្ទាល់ ដើម្បីកុំឱ្យចេញ JSON
 app.post('/api/create-order', async (req, res) => {
     try {
-        const { orderId, amount, phone, address, shippingFee, cart } = req.body;
+        let { orderId, amount, phone, address, shippingFee, cart } = req.body;
         
+        // 🟢 Parse cart ຖ້າຫາກវាຖືກສົ່ງមកជា String
+        let parsedCart = typeof cart === 'string' ? JSON.parse(cart) : cart;
+
         ordersDatabase[orderId] = {
             orderId,
             amount,
             phone,
             address,
             shippingFee,
-            cart,
+            cart: parsedCart,
             status: 'PENDING'
         };
 
         const req_time = Math.floor(Date.now() / 1000).toString();
-        const itemsBase64 = getBase64Items(cart, shippingFee);
+        const itemsBase64 = getBase64Items(parsedCart, shippingFee);
         const hash = createHash(req_time, PAYWAY_MERCHANT_ID, orderId, amount, itemsBase64, PAYWAY_API_KEY);
 
-        // ส่งกลับมาជា HTML Page ដែលធ្វើ Auto-submit ទៅ ABA PayWay ភ្លាមៗ
         const htmlResponse = `
             <!DOCTYPE html>
             <html lang="km">
@@ -75,7 +79,7 @@ app.post('/api/create-order', async (req, res) => {
             </head>
             <body onload="document.getElementById('payway-form').submit();">
                 <div style="text-align: center; margin-top: 20vh; font-family: sans-serif;">
-                    <h2>กำลังเชื่อมต่อไปยัง ABA PayWay...</h2>
+                    <h2>កំពុងតភ្ជាប់ទៅកាន់ ABA PayWay...</h2>
                     <p>សូមរង់ចាំបន្តិច...</p>
                 </div>
                 <form id="payway-form" action="${PAYWAY_API_URL}" method="POST">
@@ -106,7 +110,7 @@ app.post('/api/payway-webhook', async (req, res) => {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
 
-            let orderText = "🎉 *การបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
+            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
             orderInfo.cart.forEach((item, index) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });

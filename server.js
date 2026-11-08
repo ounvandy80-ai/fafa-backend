@@ -29,7 +29,6 @@ function createHash(req_time, merchant_id, tran_id, amount, items, api_key) {
 }
 
 function getBase64Items(cart, shippingFee) {
-    // 🟢 ពិនិត្យនិង Parse cart ប្រសិនបើវាជា String
     let cartArray = typeof cart === 'string' ? JSON.parse(cart) : cart;
 
     let itemsList = cartArray.map(item => ({
@@ -49,11 +48,10 @@ function getBase64Items(cart, shippingFee) {
     return Buffer.from(JSON.stringify(itemsList)).toString('base64');
 }
 
+// 🟢 1️⃣ API សម្រាប់ហៅទៅ ABA PayWay ដើម្បីយក QR Code មកបង្ហាញលើ Mini App
 app.post('/api/create-order', async (req, res) => {
     try {
         let { orderId, amount, phone, address, shippingFee, cart } = req.body;
-        
-        // 🟢 Parse cart ຖ້າຫາກវាຖືກສົ່ງមកជា String
         let parsedCart = typeof cart === 'string' ? JSON.parse(cart) : cart;
 
         ordersDatabase[orderId] = {
@@ -70,31 +68,33 @@ app.post('/api/create-order', async (req, res) => {
         const itemsBase64 = getBase64Items(parsedCart, shippingFee);
         const hash = createHash(req_time, PAYWAY_MERCHANT_ID, orderId, amount, itemsBase64, PAYWAY_API_KEY);
 
-        const htmlResponse = `
-            <!DOCTYPE html>
-            <html lang="km">
-            <head>
-                <meta charset="UTF-8">
-                <title>Redirecting to ABA PayWay...</title>
-            </head>
-            <body onload="document.getElementById('payway-form').submit();">
-                <div style="text-align: center; margin-top: 20vh; font-family: sans-serif;">
-                    <h2>កំពុងតភ្ជាប់ទៅកាន់ ABA PayWay...</h2>
-                    <p>សូមរង់ចាំបន្តិច...</p>
-                </div>
-                <form id="payway-form" action="${PAYWAY_API_URL}" method="POST">
-                    <input type="hidden" name="merchant_id" value="${PAYWAY_MERCHANT_ID}">
-                    <input type="hidden" name="req_time" value="${req_time}">
-                    <input type="hidden" name="tran_id" value="${orderId}">
-                    <input type="hidden" name="amount" value="${amount}">
-                    <input type="hidden" name="items" value="${itemsBase64}">
-                    <input type="hidden" name="hash" value="${hash}">
-                </form>
-            </body>
-            </html>
-        `;
+        // រៀបចំទិន្នន័យផ្ញើទៅ ABA PayWay API ເພື່ອຂໍ QR Code
+        const params = new URLSearchParams();
+        params.append('req_time', req_time);
+        params.append('merchant_id', PAYWAY_MERCHANT_ID);
+        params.append('tran_id', orderId);
+        params.append('amount', amount);
+        params.append('items', itemsBase64);
+        params.append('hash', hash);
+        params.append('type', 'qr'); // 🟢 កំណត់ type ជា qr ដើម្បីឱ្យ ABA បង្កើត QR មកវិញ
 
-        res.send(htmlResponse);
+        const response = await axios.post(PAYWAY_API_URL, params, {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+
+        const result = response.data;
+
+        if (result.status && result.status.code === '00') {
+            // 🟢 ส่งข้อมูล QR Image กลับទៅ Frontend ជា JSON
+            res.json({
+                success: true,
+                qrImage: result.qrImage, 
+                qrString: result.qrString,
+                tran_id: orderId
+            });
+        } else {
+            res.json({ success: false, message: result.status.message || 'Failed to generate QR' });
+        }
 
     } catch (error) {
         console.error("Server Error:", error.message);
@@ -102,6 +102,7 @@ app.post('/api/create-order', async (req, res) => {
     }
 });
 
+// 2️⃣ ABA PayWay Webhook Endpoint
 app.post('/api/payway-webhook', async (req, res) => {
     try {
         const { tran_id, status } = req.body;
@@ -110,7 +111,7 @@ app.post('/api/payway-webhook', async (req, res) => {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
 
-            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA!*\n\n";
+            let orderText = "🎉 *ការបញ្ជាទិញ និងទូទាត់ប្រាក់ជោគជ័យតាម ABA (ABA QR)!*\n\n";
             orderInfo.cart.forEach((item, index) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });

@@ -10,14 +10,14 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// 🟢 ភ្ជាប់ទៅកាន់ MongoDB Atlas (ទាញយកពី Environment Variable របស់ Render ឬใส่ Connection String ផ្ទាល់)
+// 🟢 ភ្ជាប់ទៅកាន់ MongoDB Atlas
 const MONGO_URI = "mongodb+srv://ounvandy80_db_user:Ounvandy25012003@cluster0.v5i9ayl.mongodb.net/fafa_shop?retryWrites=true&w=majority";
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB Atlas successfully!'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// 🟢 กำหนด Schema សម្រាប់ផលិតផលនិងស្តុក
+// 🟢 Schema សម្រាប់ផលិតផលនិងស្តុក
 const productSchema = new mongoose.Schema({
     id: Number,
     name: String,
@@ -27,8 +27,9 @@ const productSchema = new mongoose.Schema({
 });
 const Product = mongoose.model('Product', productSchema);
 
-// 🟢 กำหนด Schema សម្រាប់ប្រវត្តិការបញ្ជាទិញ
+// 🟢 Schema សម្រាប់ប្រវត្តិការបញ្ជាទិញ (បន្ថែម telegramId)
 const orderSchema = new mongoose.Schema({
+    telegramId: String,
     orderId: String,
     amount: Number,
     name: String,
@@ -82,13 +83,14 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// API ទទួលការបញ្ជាទិញ
+// API ទទួលការបញ្ជាទិញ (រក្សាទុក telegramId ចូល Database)
 app.post('/api/create-order', async (req, res) => {
     try {
-        let { orderId, amount, name, phone, address, shippingFee, shippingName, cart } = req.body;
+        let { telegramId, orderId, amount, name, phone, address, shippingFee, shippingName, cart } = req.body;
         let parsedCart = typeof cart === 'string' ? JSON.parse(cart) : cart;
 
         let newOrder = new Order({
+            telegramId: telegramId || 'guest',
             orderId,
             amount,
             name,          
@@ -115,6 +117,16 @@ app.post('/api/create-order', async (req, res) => {
     }
 });
 
+// 🟢 API សម្រាប់ Frontend ទាញយកប្រវត្តិទិញតាម Telegram ID ពី Database
+app.get('/api/orders/:telegramId', async (req, res) => {
+    try {
+        let orders = await Order.find({ telegramId: req.params.telegramId, status: 'PAID' }).sort({ _id: -1 });
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 // API បញ្ជាក់ការបង់ប្រាក់ និងកាត់ស្តុកអចិន្ត្រៃយ៍លើ Database
 app.post('/api/confirm-payment', async (req, res) => {
     try {
@@ -126,7 +138,6 @@ app.post('/api/confirm-payment', async (req, res) => {
             orderInfo.status = 'PAID';
             await orderInfo.save();
 
-            // 🟢 កាត់ស្តុកនៅលើ Database យ៉ាងពិតប្រាកដ
             for (let cartItem of orderInfo.cart) {
                 let product = await Product.findOne({ id: cartItem.id });
                 if (product) {

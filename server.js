@@ -33,36 +33,20 @@ app.get('/api/products', (req, res) => {
     res.json(products);
 });
 
-// 🟢 API សម្រាប់អតិថិជនទាញយកប្រវត្តិការបញ្ជាទិញរបស់ខ្លួនឯង
-app.get('/api/my-orders', (req, res) => {
-    try {
-        let { telegramId } = req.query;
-        let userOrders = Object.values(ordersDatabase)
-            .filter(o => o.telegramId === telegramId && o.status === 'PAID')
-            .reverse(); // បង្ហាញការបញ្ជាទិញចុងក្រោយមុនគេ
-        res.json(userOrders);
-    } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
-    }
-});
-
-// API ទទួលការបញ្ជាទិញ
 app.post('/api/create-order', async (req, res) => {
     try {
-        let { orderId, amount, telegramId, name, phone, address, shippingFee, shippingName, cart } = req.body;
+        let { orderId, amount, name, phone, address, shippingFee, shippingName, cart } = req.body;
         let parsedCart = typeof cart === 'string' ? JSON.parse(cart) : cart;
 
         ordersDatabase[orderId] = {
             orderId,
             amount,
-            telegramId: telegramId || 'guest_user', // 🟢 រក្សាទុក Telegram ID
             name,          
             phone,
             address,
             shippingFee,
             shippingName,  
             cart: parsedCart,
-            date: new Date().toLocaleString('en-GB'), // 🟢 កត់ត្រាថ្ងៃខែឆ្នាំទិញ
             status: 'PENDING'
         };
 
@@ -78,7 +62,6 @@ app.post('/api/create-order', async (req, res) => {
     }
 });
 
-// API បញ្ជាក់ការបង់ប្រាក់ និងកាត់ស្តុកលើ Server ផ្ទាល់
 app.post('/api/confirm-payment', async (req, res) => {
     try {
         const { tran_id } = req.body;
@@ -95,6 +78,9 @@ app.post('/api/confirm-payment', async (req, res) => {
             });
 
             let orderText = "🎉 *ការបញ្ជាទិញថ្មី (បង់ប្រាក់រួចរាល់)!*\n\n";
+            // 🟢 បន្ថែមការបង្ហាញលេខកូដបញ្ជាទិញ (Order ID) ត្រង់នេះ
+            orderText += `📦 *កូដបញ្ជាទិញ:* \`${orderInfo.orderId}\`\n\n`;
+
             orderInfo.cart.forEach((item, index) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });
@@ -102,7 +88,7 @@ app.post('/api/confirm-payment', async (req, res) => {
             orderText += `\n👤 *ឈ្មោះអ្នកទិញ:* ${orderInfo.name || 'មិនមានឈ្មោះ'}`;
             orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
             orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
-            orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName || 'ធម្មតា'} ($${orderInfo.shippingFee})`;
+            orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName} ($${orderInfo.shippingFee})`;
             orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
             orderText += `\n🏦 *គណនី ABA:* SRY VANDY (500258373)`;
             orderText += `\n✅ *ស្ថានភាព:* អតិថិជនបានបញ្ជាក់ការបង់ប្រាក់ (កាត់ស្តុកជោគជ័យ)`;

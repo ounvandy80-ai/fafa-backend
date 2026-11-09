@@ -11,7 +11,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // 🟢 ភ្ជាប់ទៅកាន់ MongoDB Atlas (ទាញយកពី Environment Variable របស់ Render ឬใส่ Connection String ផ្ទាល់)
-const MONGO_URI = "mongodb+srv://ounvandy80_db_user:S5IBvdGqBuSsCdJD@cluster0.v5i9ayl.mongodb.net/fafa_shop?retryWrites=true&w=majority";
+const MONGO_URI = "mongodb+srv://ounvandy80_db_user:Ounvandy25012003@cluster0.v5i9ayl.mongodb.net/fafa_shop?retryWrites=true&w=majority";
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB Atlas successfully!'))

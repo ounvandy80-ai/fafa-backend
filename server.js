@@ -27,7 +27,7 @@ const productSchema = new mongoose.Schema({
 });
 const Product = mongoose.model('Product', productSchema);
 
-// 🟢 Schema សម្រាប់ប្រវត្តិការបញ្ជាទិញ (បន្ថែម telegramId)
+// 🟢 Schema សម្រាប់ប្រវត្តិការបញ្ជាទិញ
 const orderSchema = new mongoose.Schema({
     telegramId: String,
     orderId: String,
@@ -83,7 +83,7 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// API ទទួលការបញ្ជាទិញ (រក្សាទុក telegramId ចូល Database)
+// API ទទួលការបញ្ជាទិញ
 app.post('/api/create-order', async (req, res) => {
     try {
         let { telegramId, orderId, amount, name, phone, address, shippingFee, shippingName, cart } = req.body;
@@ -117,7 +117,7 @@ app.post('/api/create-order', async (req, res) => {
     }
 });
 
-// 🟢 API សម្រាប់ Frontend ទាញយកប្រវត្តិទិញតាម Telegram ID ពី Database
+// API ទាញយកប្រវត្តិទិញតាម Telegram ID
 app.get('/api/orders/:telegramId', async (req, res) => {
     try {
         let orders = await Order.find({ telegramId: req.params.telegramId, status: 'PAID' }).sort({ _id: -1 });
@@ -177,6 +177,53 @@ app.post('/api/confirm-payment', async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
+
+// ==========================================
+// 🛠️ ADMIN API ROUTES (សម្រាប់គ្រប់គ្រងស្តុក និងផលិតផល)
+// ==========================================
+
+// 1. API សម្រាប់ Admin កែស្តុកផលិតផល
+app.put('/api/admin/update-stock', async (req, res) => {
+    try {
+        const { id, stock } = req.body;
+        let product = await Product.findOne({ id: id });
+        if (!product) return res.json({ success: false, message: 'រកមិនឃើញផលិតផលទេ' });
+
+        product.stock = stock;
+        await product.save();
+        res.json({ success: true, message: 'Updated successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 2. API សម្រាប់ Admin បន្ថែមផលិតផលថ្មី
+app.post('/api/admin/add-product', async (req, res) => {
+    try {
+        const { id, name, price, stock, image } = req.body;
+        let exist = await Product.findOne({ id: id });
+        if (exist) return res.json({ success: false, message: 'ID ផលិតផលនេះមានរួចហើយ!' });
+
+        let newProd = new Product({ id, name, price, stock, image });
+        await newProd.save();
+        res.json({ success: true, message: 'Product added successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 3. API សម្រាប់ Admin លុបផលិតផល
+app.delete('/api/admin/delete-product/:id', async (req, res) => {
+    try {
+        let productId = req.params.id;
+        await Product.deleteOne({ id: productId });
+        res.json({ success: true, message: 'Deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// ==========================================
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -18,14 +18,14 @@ const TELEGRAM_CHAT_ID = '7488093549';
 
 // 🟢 ទុកបញ្ជីផលិតផលនិងស្តុកនៅលើ Server ផ្ទាល់
 let products = [
-    { id: 1, name: "អាវយឺត FREE SIZE", price: 0.05, stock: 5, image: "https://i.postimg.cc/0NrGyrGt/858535232-122143330293104345-8003998162307616562-n.jpg" },
-    { id: 2, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 3, image: "https://i.postimg.cc/HkY4F6rY/858998600-122143328523104345-9154920380344446311-n.jpg" },
-    { id: 3, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 2, image: "https://i.postimg.cc/T1R3T7By/859090829-122143330215104345-4641336911256672944-n.jpg" },
-    { id: 4, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 4, image: "https://i.postimg.cc/k4CnyYJL/859396177-122143328499104345-4898313489564552661-n.jpg" },
+    { id: 1, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/0NrGyrGt/858535232-122143330293104345-8003998162307616562-n.jpg" },
+    { id: 2, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/HkY4F6rY/858998600-122143328523104345-9154920380344446311-n.jpg" },
+    { id: 3, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/T1R3T7By/859090829-122143330215104345-4641336911256672944-n.jpg" },
+    { id: 4, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/k4CnyYJL/859396177-122143328499104345-4898313489564552661-n.jpg" },
     { id: 5, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/kG1qqnQn/859396179-122143328535104345-7526329722242687048-n.jpg" },
-    { id: 6, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 6, image: "https://i.postimg.cc/sXKR4V0f/859784793-122143328547104345-5525957976114747478-n.jpg" },
-    { id: 7, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 0, image: "https://i.postimg.cc/brJf6KKV/859980286-122143330197104345-5978106523108566575-n.jpg" },
-    { id: 8, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 0, image: "https://i.postimg.cc/XqzStsWV/863325406-122143330281104345-4670333600097983632-n.jpg" }
+    { id: 6, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/sXKR4V0f/859784793-122143328547104345-5525957976114747478-n.jpg" },
+    { id: 7, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/brJf6KKV/859980286-122143330197104345-5978106523108566575-n.jpg" },
+    { id: 8, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/XqzStsWV/863325406-122143330281104345-4670333600097983632-n.jpg" }
 ];
 
 let ordersDatabase = {};

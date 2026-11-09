@@ -16,7 +16,6 @@ app.get('/', (req, res) => {
 const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';
 const TELEGRAM_CHAT_ID = '7488093549';
 
-// 🟢 ទុកបញ្ជីផលិតផលនិងស្តុកនៅលើ Server ផ្ទាល់
 let products = [
     { id: 1, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/0NrGyrGt/858535232-122143330293104345-8003998162307616562-n.jpg" },
     { id: 2, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/HkY4F6rY/858998600-122143328523104345-9154920380344446311-n.jpg" },
@@ -30,26 +29,40 @@ let products = [
 
 let ordersDatabase = {};
 
-// API សម្រាប់ Frontend ទាញយកទិន្នន័យផលិតផលនិងស្តុកចុងក្រោយ
 app.get('/api/products', (req, res) => {
     res.json(products);
+});
+
+// 🟢 API សម្រាប់អតិថិជនទាញយកប្រវត្តិការបញ្ជាទិញរបស់ខ្លួនឯង
+app.get('/api/my-orders', (req, res) => {
+    try {
+        let { telegramId } = req.query;
+        let userOrders = Object.values(ordersDatabase)
+            .filter(o => o.telegramId === telegramId && o.status === 'PAID')
+            .reverse(); // បង្ហាញការបញ្ជាទិញចុងក្រោយមុនគេ
+        res.json(userOrders);
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
 });
 
 // API ទទួលការបញ្ជាទិញ
 app.post('/api/create-order', async (req, res) => {
     try {
-        let { orderId, amount, name, phone, address, shippingFee, shippingName, cart } = req.body;
+        let { orderId, amount, telegramId, name, phone, address, shippingFee, shippingName, cart } = req.body;
         let parsedCart = typeof cart === 'string' ? JSON.parse(cart) : cart;
 
         ordersDatabase[orderId] = {
             orderId,
             amount,
-            name,          // 🟢 ទទួលឈ្មោះអ្នកទិញ
+            telegramId: telegramId || 'guest_user', // 🟢 រក្សាទុក Telegram ID
+            name,          
             phone,
             address,
             shippingFee,
-            shippingName,  // 🟢 ទទួលឈ្មោះសេវាដឹកជញ្ជូន
+            shippingName,  
             cart: parsedCart,
+            date: new Date().toLocaleString('en-GB'), // 🟢 កត់ត្រាថ្ងៃខែឆ្នាំទិញ
             status: 'PENDING'
         };
 
@@ -74,7 +87,6 @@ app.post('/api/confirm-payment', async (req, res) => {
             ordersDatabase[tran_id].status = 'PAID';
             let orderInfo = ordersDatabase[tran_id];
 
-            // 🟢 កាត់ស្តុកនៅលើ Server យ៉ាងពិតប្រាកដ
             orderInfo.cart.forEach(cartItem => {
                 let product = products.find(p => p.id === cartItem.id);
                 if (product) {
@@ -87,7 +99,6 @@ app.post('/api/confirm-payment', async (req, res) => {
                 orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
             });
             
-            // 🟢 បន្ថែមការបង្ហាញឈ្មោះ និងសេវាដឹកជញ្ជូនចូលក្នុងសារ Telegram (កន្លែងនេះដែលខ្វះមុននេះ)
             orderText += `\n👤 *ឈ្មោះអ្នកទិញ:* ${orderInfo.name || 'មិនមានឈ្មោះ'}`;
             orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
             orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;

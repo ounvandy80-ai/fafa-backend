@@ -38,7 +38,7 @@ const orderSchema = new mongoose.Schema({
     shippingFee: Number,
     shippingName: String,
     cart: Array,
-    status: String,
+    status: String, // PENDING, PAID, REJECTED
     date: String
 });
 const Order = mongoose.model('Order', orderSchema);
@@ -117,17 +117,17 @@ app.post('/api/create-order', async (req, res) => {
     }
 });
 
-// API ទាញយកប្រវត្តិទិញតាម Telegram ID
+// API ទាញយកប្រវត្តិទិញតាម Telegram ID (បង្ហាញទាំង PENDING, PAID, REJECTED ឱ្យអតិថិជនបានដឹង)
 app.get('/api/orders/:telegramId', async (req, res) => {
     try {
-        let orders = await Order.find({ telegramId: req.params.telegramId, status: 'PAID' }).sort({ _id: -1 });
+        let orders = await Order.find({ telegramId: req.params.telegramId }).sort({ _id: -1 });
         res.json(orders);
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// API បញ្ជាក់ការបង់ប្រាក់ និងកាត់ស្តុកអចិន្ត្រៃយ៍លើ Database
+// API អតិថិជនចុចបញ្ជាក់ថាបានបង់ប្រាក់ (ផ្ញើសារជូនដំណឹងទៅ Admin និងទុករង់ចាំ Approve)
 app.post('/api/confirm-payment', async (req, res) => {
     try {
         const { tran_id } = req.body;
@@ -135,18 +135,10 @@ app.post('/api/confirm-payment', async (req, res) => {
         let orderInfo = await Order.findOne({ orderId: tran_id });
 
         if (orderInfo) {
-            orderInfo.status = 'PAID';
+            orderInfo.status = 'PENDING'; // រក្សាទុកជា Pending ដើម្បីឱ្យ Admin ពិនិត្យ
             await orderInfo.save();
 
-            for (let cartItem of orderInfo.cart) {
-                let product = await Product.findOne({ id: cartItem.id });
-                if (product) {
-                    product.stock = Math.max(0, product.stock - cartItem.quantity);
-                    await product.save();
-                }
-            }
-
-            let orderText = "🎉 *ការបញ្ជាទិញថ្មី (បង់ប្រាក់រួចរាល់)!*\n\n";
+            let orderText = "🔔 *មានការបញ្ជាទិញថ្មី (រង់ចាំការផ្ទៀងផ្ទាត់លុយ)!*\n\n";
             orderText += `📦 *កូដបញ្ជាទិញ:* \`${orderInfo.orderId}\`\n\n`;
 
             orderInfo.cart.forEach((item, index) => {
@@ -159,7 +151,7 @@ app.post('/api/confirm-payment', async (req, res) => {
             orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName} ($${orderInfo.shippingFee})`;
             orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
             orderText += `\n🏦 *គណនី ABA:* SRY VANDY (500258373)`;
-            orderText += `\n✅ *ស្ថានភាព:* អតិថិជនបានបញ្ជាក់ការបង់ប្រាក់ (កាត់ស្តុកលើ Database រួចរាល់)`;
+            orderText += `\n⏳ *ស្ថានភាព:* កំពុងរង់ចាំ Admin ពិនិត្យផ្ទៀងផ្ទាត់ការបង់ប្រាក់ក្នុង Admin Panel`;
 
             await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 chat_id: TELEGRAM_CHAT_ID,
@@ -167,8 +159,7 @@ app.post('/api/confirm-payment', async (req, res) => {
                 parse_mode: 'Markdown'
             });
 
-            let updatedProducts = await Product.find({});
-            return res.json({ success: true, products: updatedProducts });
+            return res.json({ success: true, message: 'Order submitted for verification' });
         }
 
         res.json({ success: false, message: 'Order not found' });
@@ -182,7 +173,6 @@ app.post('/api/confirm-payment', async (req, res) => {
 // 🛠️ ADMIN API ROUTES (សម្រាប់គ្រប់គ្រងស្តុក និងផលិតផល)
 // ==========================================
 
-// 1. API សម្រាប់ Admin កែស្តុកផលិតផល
 app.put('/api/admin/update-stock', async (req, res) => {
     try {
         const { id, stock } = req.body;
@@ -197,7 +187,6 @@ app.put('/api/admin/update-stock', async (req, res) => {
     }
 });
 
-// 2. API សម្រាប់ Admin បន្ថែមផលិតផលថ្មី
 app.post('/api/admin/add-product', async (req, res) => {
     try {
         const { id, name, price, stock, image } = req.body;
@@ -212,7 +201,6 @@ app.post('/api/admin/add-product', async (req, res) => {
     }
 });
 
-// 3. API សម្រាប់ Admin លុបផលិតផល
 app.delete('/api/admin/delete-product/:id', async (req, res) => {
     try {
         let productId = req.params.id;
@@ -223,7 +211,6 @@ app.delete('/api/admin/delete-product/:id', async (req, res) => {
     }
 });
 
-// 4. (បន្ថែមថ្មី) API សម្រាប់ Admin ទាញយកបញ្ជី Order ដែលរង់ចាំផ្ទៀងផ្ទាត់
 app.get('/api/admin/pending-orders', async (req, res) => {
     try {
         let pendingOrders = await Order.find({ status: 'PENDING' }).sort({ _id: -1 });
@@ -233,7 +220,7 @@ app.get('/api/admin/pending-orders', async (req, res) => {
     }
 });
 
-// 5. (បន្ថែមថ្មី) API សម្រាប់ Admin Approve ឬ Reject ការបញ្ជាទិញ
+// API Admin ចុច Approve ឬ Reject
 app.post('/api/admin/order-action', async (req, res) => {
     try {
         const { orderId, action } = req.body; // action: 'APPROVE' ឬ 'REJECT'
@@ -245,7 +232,7 @@ app.post('/api/admin/order-action', async (req, res) => {
             order.status = 'PAID';
             await order.save();
 
-            // កាត់ស្តុកពេល Approve
+            // កាត់ស្តុកអចិន្ត្រៃយ៍ពេល Admin ចុច Approve ថាមានលុយចូលពិតប្រាកដ
             for (let cartItem of order.cart) {
                 let product = await Product.findOne({ id: cartItem.id });
                 if (product) {
@@ -253,11 +240,11 @@ app.post('/api/admin/order-action', async (req, res) => {
                     await product.save();
                 }
             }
-            return res.json({ success: true, message: 'បានអនុម័ត (Approve) ការបញ្ជាទិញជោគជ័យ!' });
+            return res.json({ success: true, message: 'បានអនុម័ត (Approve) ការបញ្ជាទិញជោគជ័យ និងកាត់ស្តុកស្របច្បាប់!' });
         } else if (action === 'REJECT') {
             order.status = 'REJECTED';
             await order.save();
-            return res.json({ success: true, message: 'បានបដិសេធ (Reject) ការបញ្ជាទិញ!' });
+            return res.json({ success: true, message: 'បានបដិសេធ (Reject) ការបញ្ជាទិញនេះរួចរាល់!' });
         }
 
         res.json({ success: false, message: 'Action មិនត្រឹមត្រូវ។' });
@@ -265,8 +252,6 @@ app.post('/api/admin/order-action', async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
-
-// ==========================================
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

@@ -93,7 +93,7 @@ app.post('/api/create-order', async (req, res) => {
             telegramId: telegramId || 'guest',
             orderId,
             amount,
-            name,          
+            name,         
             phone,
             address,
             shippingFee,
@@ -218,6 +218,49 @@ app.delete('/api/admin/delete-product/:id', async (req, res) => {
         let productId = req.params.id;
         await Product.deleteOne({ id: productId });
         res.json({ success: true, message: 'Deleted successfully' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 4. (បន្ថែមថ្មី) API សម្រាប់ Admin ទាញយកបញ្ជី Order ដែលរង់ចាំផ្ទៀងផ្ទាត់
+app.get('/api/admin/pending-orders', async (req, res) => {
+    try {
+        let pendingOrders = await Order.find({ status: 'PENDING' }).sort({ _id: -1 });
+        res.json(pendingOrders);
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 5. (បន្ថែមថ្មី) API សម្រាប់ Admin Approve ឬ Reject ការបញ្ជាទិញ
+app.post('/api/admin/order-action', async (req, res) => {
+    try {
+        const { orderId, action } = req.body; // action: 'APPROVE' ឬ 'REJECT'
+        let order = await Order.findOne({ orderId: orderId });
+        
+        if (!order) return res.json({ success: false, message: 'រកមិនឃើញ Order នេះទេ។' });
+
+        if (action === 'APPROVE') {
+            order.status = 'PAID';
+            await order.save();
+
+            // កាត់ស្តុកពេល Approve
+            for (let cartItem of order.cart) {
+                let product = await Product.findOne({ id: cartItem.id });
+                if (product) {
+                    product.stock = Math.max(0, product.stock - cartItem.quantity);
+                    await product.save();
+                }
+            }
+            return res.json({ success: true, message: 'បានអនុម័ត (Approve) ការបញ្ជាទិញជោគជ័យ!' });
+        } else if (action === 'REJECT') {
+            order.status = 'REJECTED';
+            await order.save();
+            return res.json({ success: true, message: 'បានបដិសេធ (Reject) ការបញ្ជាទិញ!' });
+        }
+
+        res.json({ success: false, message: 'Action មិនត្រឹមត្រូវ។' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }

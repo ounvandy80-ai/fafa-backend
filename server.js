@@ -16,14 +16,14 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB Atlas successfully!'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// 🟢 Schema សម្រាប់ផលិតផល (colors ឥឡូវមាន stock ផ្ទាល់ខ្លួន)
+// 🟢 Schema សម្រាប់ផលិតផល (colors មាន stock ផ្ទាល់ខ្លួន)
 const productSchema = new mongoose.Schema({
     id: Number,
     name: String,
     price: Number,
     stock: Number, // ស្តុកសរុប
     image: String,
-    colors: Array // [{ colorName: "ពណ៌ខ្មៅ", image: "...", stock: 1 }, { colorName: "ពណ៌ផ្កាឈូក", image: "...", stock: 2 }]
+    colors: Array // [{ colorName: "ពណ៌ខ្មៅ", image: "...", stock: 1 }, ...]
 });
 const Product = mongoose.model('Product', productSchema);
 
@@ -165,19 +165,24 @@ app.post('/api/admin/order-action', async (req, res) => {
             orderInfo.status = 'PAID';
             await orderInfo.save();
 
-            // កាត់ស្តុកសរុប និងស្តុកតាមពណ៌នីមួយៗ
+            // កាត់ស្តុកសរុប និងស្តុកតាមពណ៌នីមួយៗ (ដោយស្វែងរកពណ៌តាមកម្រិតបត់បែនខ្ពស់)
             for (let cartItem of orderInfo.cart) {
                 let product = await Product.findOne({ id: cartItem.id });
                 if (product) {
                     product.stock = Math.max(0, product.stock - cartItem.quantity);
                     
-                    // បើមានការរើសពណ៌ ឱ្យវាhកាត់ស្តុកក្នុង array ពណ៌នោះផង
-                    if (cartItem.selectedColor && product.colors) {
-                        let colorObj = product.colors.find(c => c.colorName === cartItem.selectedColor);
+                    if (cartItem.selectedColor && product.colors && product.colors.length > 0) {
+                        let targetColor = cartItem.selectedColor.trim().toLowerCase();
+                        let colorObj = product.colors.find(c => {
+                            let dbColor = c.colorName.trim().toLowerCase();
+                            return dbColor === targetColor || dbColor.includes(targetColor) || targetColor.includes(dbColor);
+                        });
+
                         if (colorObj) {
                             colorObj.stock = Math.max(0, (colorObj.stock || 0) - cartItem.quantity);
                         }
                     }
+                    product.markModified('colors');
                     await product.save();
                 }
             }

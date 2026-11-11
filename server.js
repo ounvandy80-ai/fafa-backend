@@ -16,14 +16,13 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB Atlas successfully!'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// 🟢 Schema សម្រាប់ផលិតផល (colors មាន stock ផ្ទាល់ខ្លួន)
 const productSchema = new mongoose.Schema({
     id: Number,
     name: String,
     price: Number,
-    stock: Number, // ស្តុកសរុប
+    stock: Number,
     image: String,
-    colors: Array // [{ colorName: "ពណ៌ខ្មៅ", image: "...", stock: 1 }, ...]
+    colors: Array
 });
 const Product = mongoose.model('Product', productSchema);
 
@@ -34,6 +33,7 @@ const orderSchema = new mongoose.Schema({
     name: String,
     phone: String,
     address: String,
+    location: Object, // 📍 រក្សាទុកទីតាំង GPS (Latitude, Longitude)
     shippingFee: Number,
     shippingName: String,
     cart: Array,
@@ -42,8 +42,18 @@ const orderSchema = new mongoose.Schema({
 });
 const Order = mongoose.model('Order', orderSchema);
 
+// 👤 Schema សម្រាប់គ្រប់គ្រង User និងสถานະ Block
+const userSchema = new mongoose.Schema({
+    telegramId: String,
+    name: String,
+    phone: String,
+    isBlocked: { type: Boolean, default: false },
+    lastActive: String
+});
+const User = mongoose.model('User', userSchema);
+
 app.get('/', (req, res) => {
-    res.send('FAFA Clothing Backend with MongoDB is running successfully!');
+    res.send('FAFA Clothing Backend with Advanced Admin features is running!');
 });
 
 const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';
@@ -58,9 +68,38 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
+// 🟢 ពិនិត្យសិទ្ធិ User ពេលបើក App និងាប់យករបាយការណ៍ Online
+app.post('/api/user/ping', async (req, res) => {
+    try {
+        let { telegramId, name, phone } = req.body;
+        if (!telegramId) return res.json({ success: false });
+
+        let user = await User.findOne({ telegramId });
+        if (!user) {
+            user = new User({ telegramId, name: name || 'Guest', phone: phone || '', isBlocked: false, lastActive: new Date() });
+        } else {
+            user.lastActive = new Date();
+            if (name) user.name = name;
+            if (phone) user.phone = phone;
+        }
+        await user.save();
+
+        res.json({ success: true, isBlocked: user.isBlocked });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
 app.post('/api/create-order', async (req, res) => {
     try {
-        let { telegramId, orderId, amount, name, phone, address, shippingFee, shippingName, cart } = req.body;
+        let { telegramId, orderId, amount, name, phone, address, location, shippingFee, shippingName, cart } = req.body;
+        
+        // ពិនិត្យមើលថាតើ User នេះຖືກ Block ហើយឬยัง
+        let userCheck = await User.findOne({ telegramId });
+        if (userCheck && userCheck.isBlocked) {
+            return res.status(403).json({ success: false, message: 'គណនីរបស់អ្នកត្រូវបានបិទសិទ្ធិ (Blocked) មិនអាចបញ្ជាទិញបានទេ!' });
+        }
+
         let parsedCart = typeof cart === 'string' ? JSON.parse(cart) : cart;
 
         let newOrder = new Order({
@@ -70,6 +109,7 @@ app.post('/api/create-order', async (req, res) => {
             name,         
             phone,
             address,
+            location: location || null,
             shippingFee,
             shippingName,  
             cart: parsedCart,
@@ -109,39 +149,60 @@ app.post('/api/confirm-payment', async (req, res) => {
 });
 
 // ==========================================
-// 🛠️ ADMIN APIs
+// 🛠️ ADMIN APIs (Advanced Management)
 // ==========================================
 
-// API សម្រាប់ Admin កែប្រែព័ត៌មានផលិតផល (ឈ្មោះ, តម្លៃ, ស្តុកសរុប, រូបភាព និងពណ៌រួមទាំងស្តុកតាមពណ៌)
-app.put('/api/admin/update-product', async (req, res) => {
+// 1. ទាញយកបញ្ជី User ទាំងអស់ និងចំនួន Online ក្នុងរយៈពេល ៥ នាទីចុងក្រោយ
+app.get('/api/admin/users', async (req, res) => {
     try {
-        const { id, name, price, stock, image, colors } = req.body;
-        let product = await Product.findOne({ id: id });
-        
-        if (!product) return res.json({ success: false, message: 'រកមិនឃើញផលិតផលទេ' });
+        let users = await User.find({}).sort({ lastActive: -1 });
+        let fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000);
+        let onlineCount = await User.countDocuments({ lastActive: { $gte: fiveMinutesAgo } });
 
-        product.name = name;
-        product.price = Number(price);
-        product.stock = Number(stock);
-        product.image = image;
-        product.colors = colors || [];
-
-        await product.save();
-        res.json({ success: true, message: 'បានកែប្រែផលិតផលជោគជ័យ!' });
+        res.json({ success: true, onlineCount, users });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// API សម្រាប់កែស្តុកដាច់ដោយឡែក (រក្សាទុកเผื่อ compatibility)
-app.put('/api/admin/update-stock', async (req, res) => {
+// 2. មុខងារ Block ឬ Unblock User
+app.post('/api/admin/toggle-block', async (req, res) => {
     try {
-        const { id, stock } = req.body;
+        let { telegramId } = req.body;
+        let user = await User.findOne({ telegramId });
+        if (!user) return res.json({ success: false, message: 'រកមិនឃើញ User ទេ' });
+
+        user.isBlocked = !user.isBlocked;
+        await user.save();
+        res.json({ success: true, isBlocked: user.isBlocked, message: user.isBlocked ? 'បាន Block ជោគជ័យ!' : 'បាន Unblock ជោគជ័យ!' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// 3. ស្វែងរកប្រវត្តិ User តាមរយៈលេខទូរសព្ទ (Phone Search)
+app.get('/api/admin/search-user', async (req, res) => {
+    try {
+        let phoneQuery = req.query.phone;
+        let orders = await Order.find({ phone: { $regex: phoneQuery, $options: 'i' } }).sort({ _id: -1 });
+        res.json(orders);
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+app.put('/api/admin/update-product', async (req, res) => {
+    try {
+        const { id, name, price, stock, image, colors } = req.body;
         let product = await Product.findOne({ id: id });
         if (!product) return res.json({ success: false, message: 'រកមិនឃើញផលិតផលទេ' });
-        product.stock = stock;
+        product.name = name;
+        product.price = Number(price);
+        product.stock = Number(stock);
+        product.image = image;
+        product.colors = colors || [];
         await product.save();
-        res.json({ success: true, message: 'Updated successfully' });
+        res.json({ success: true, message: 'បានកែប្រែផលិតផលជោគជ័យ!' });
     } catch (error) {
         res.status(500).json({ success: false, message: error.message });
     }
@@ -152,7 +213,6 @@ app.post('/api/admin/add-product', async (req, res) => {
         const { id, name, price, stock, image, colors } = req.body;
         let exist = await Product.findOne({ id: id });
         if (exist) return res.json({ success: false, message: 'ID ផលិតផលនេះមានរួចហើយ!' });
-
         let newProd = new Product({ id, name, price, stock, image, colors: colors || [] });
         await newProd.save();
         res.json({ success: true, message: 'Product added successfully' });
@@ -190,19 +250,16 @@ app.post('/api/admin/order-action', async (req, res) => {
             orderInfo.status = 'PAID';
             await orderInfo.save();
 
-            // កាត់ស្តុកសរុប និងស្តុកតាមពណ៌នីមួយៗ
             for (let cartItem of orderInfo.cart) {
                 let product = await Product.findOne({ id: cartItem.id });
                 if (product) {
                     product.stock = Math.max(0, product.stock - cartItem.quantity);
-                    
                     if (cartItem.selectedColor && product.colors && product.colors.length > 0) {
                         let targetColor = cartItem.selectedColor.trim().toLowerCase();
                         let colorObj = product.colors.find(c => {
                             let dbColor = c.colorName.trim().toLowerCase();
                             return dbColor === targetColor || dbColor.includes(targetColor) || targetColor.includes(dbColor);
                         });
-
                         if (colorObj) {
                             colorObj.stock = Math.max(0, (colorObj.stock || 0) - cartItem.quantity);
                         }
@@ -221,6 +278,9 @@ app.post('/api/admin/order-action', async (req, res) => {
                 orderText += `\n👤 *ឈ្មោះអ្នកទិញ:* ${orderInfo.name || 'មិនមានឈ្មោះ'}`;
                 orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
                 orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
+                if (orderInfo.location) {
+                    orderText += `\n🗺️ *Google Maps:* [ចុចទីនេះដើម្បីមើលទីតាំង](https://maps.google.com/?q=${orderInfo.location.lat},${orderInfo.location.lng})`;
+                }
                 orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName} ($${orderInfo.shippingFee})`;
                 orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
 
@@ -230,10 +290,10 @@ app.post('/api/admin/order-action', async (req, res) => {
                     parse_mode: 'Markdown'
                 });
             } catch (telegramErr) {
-                console.error("Telegram Send Error (Ignored):", telegramErr.message);
+                console.error("Telegram Send Error:", telegramErr.message);
             }
 
-            return res.json({ success: true, message: 'បាន Approve និងកាត់ស្តុកតាមពណ៌ជោគជ័យ!' });
+            return res.json({ success: true, message: 'បាន Approve និងកាត់ស្តុកជោគជ័យ!' });
         } 
         else if (action === 'REJECT') {
             orderInfo.status = 'REJECTED';

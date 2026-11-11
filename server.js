@@ -112,10 +112,10 @@ app.post('/api/confirm-payment', async (req, res) => {
 // 🛠️ ADMIN APIs
 // ==========================================
 
-// API សម្រាប់ Admin កែប្រែព័ត៌មានផលិតផល (ឈ្មោះ តម្លៃ ស្តុកសរុប និងរូបភាព)
+// API សម្រាប់ Admin កែប្រែព័ត៌មានផលិតផល (ឈ្មោះ, តម្លៃ, ស្តុកសរុប, រូបភាព និងពណ៌រួមទាំងស្តុកតាមពណ៌)
 app.put('/api/admin/update-product', async (req, res) => {
     try {
-        const { id, name, price, stock, image } = req.body;
+        const { id, name, price, stock, image, colors } = req.body;
         let product = await Product.findOne({ id: id });
         
         if (!product) return res.json({ success: false, message: 'រកមិនឃើញផលិតផលទេ' });
@@ -124,6 +124,7 @@ app.put('/api/admin/update-product', async (req, res) => {
         product.price = Number(price);
         product.stock = Number(stock);
         product.image = image;
+        product.colors = colors || [];
 
         await product.save();
         res.json({ success: true, message: 'បានកែប្រែផលិតផលជោគជ័យ!' });
@@ -189,7 +190,7 @@ app.post('/api/admin/order-action', async (req, res) => {
             orderInfo.status = 'PAID';
             await orderInfo.save();
 
-            // កាត់ស្តុកសរុប និងស្តុកតាមពណ៌នីមួយៗ (ដោយស្វែងរកពណ៌តាមកម្រិតបត់បែនខ្ពស់)
+            // កាត់ស្តុកសរុប និងស្តុកតាមពណ៌នីមួយៗ
             for (let cartItem of orderInfo.cart) {
                 let product = await Product.findOne({ id: cartItem.id });
                 if (product) {

@@ -212,24 +212,29 @@ app.post('/api/admin/order-action', async (req, res) => {
                 }
             }
 
-            let orderText = "🎉 *ការបញ្ជាទិញជោគជ័យ (Admin បាន Approve រួចរាល់)!*\n\n";
-            orderText += `📦 *កូដបញ្ជាទិញ:* \`${orderInfo.orderId}\`\n\n`;
-            orderInfo.cart.forEach((item, index) => {
-                orderText += `${index + 1}. ${item.name} ${item.selectedColor ? `(ពណ៌: ${item.selectedColor})` : ''} ($${item.price} x ${item.quantity})\n`;
-            });
-            orderText += `\n👤 *ឈ្មោះអ្នកទិញ:* ${orderInfo.name || 'មិនមានឈ្មោះ'}`;
-            orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
-            orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
-            orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName} ($${orderInfo.shippingFee})`;
-            orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
+            // 🚀 ដាក់ try...catch ការពារពេលដាច់បណ្ដាញ Telegram
+            try {
+                let orderText = "🎉 *ការបញ្ជាទិញជោគជ័យ (Admin បាន Approve រួចរាល់)!*\n\n";
+                orderText += `📦 *កូដបញ្ជាទិញ:* \`${orderInfo.orderId}\`\n\n`;
+                orderInfo.cart.forEach((item, index) => {
+                    orderText += `${index + 1}. ${item.name} ${item.selectedColor ? `(ពណ៌: ${item.selectedColor})` : ''} ($${item.price} x ${item.quantity})\n`;
+                });
+                orderText += `\n👤 *ឈ្មោះអ្នកទិញ:* ${orderInfo.name || 'មិនមានឈ្មោះ'}`;
+                orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
+                orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
+                orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName} ($${orderInfo.shippingFee})`;
+                orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
 
-            await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                chat_id: TELEGRAM_CHAT_ID,
-                text: orderText,
-                parse_mode: 'Markdown'
-            });
+                await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                    chat_id: TELEGRAM_CHAT_ID,
+                    text: orderText,
+                    parse_mode: 'Markdown'
+                });
+            } catch (telegramErr) {
+                console.error("Telegram Send Error (Ignored):", telegramErr.message);
+            }
 
-            return res.json({ success: true, message: 'បាន Approve និងផ្ញើសារទៅ Telegram រួចរាល់!' });
+            return res.json({ success: true, message: 'បាន Approve និងកាត់ស្តុកជោគជ័យ!' });
         } 
         else if (action === 'REJECT') {
             orderInfo.status = 'REJECTED';

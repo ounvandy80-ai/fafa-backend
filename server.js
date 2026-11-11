@@ -117,7 +117,7 @@ app.post('/api/create-order', async (req, res) => {
     }
 });
 
-// API ទាញយកប្រវត្តិទិញតាម Telegram ID (បង្ហាញទាំង PENDING, PAID, REJECTED ឱ្យអតិថិជនបានដឹង)
+// API ទាញយកប្រវត្តិទិញតាម Telegram ID
 app.get('/api/orders/:telegramId', async (req, res) => {
     try {
         let orders = await Order.find({ telegramId: req.params.telegramId }).sort({ _id: -1 });
@@ -127,39 +127,17 @@ app.get('/api/orders/:telegramId', async (req, res) => {
     }
 });
 
-// API អតិថិជនចុចបញ្ជាក់ថាបានបង់ប្រាក់ (ផ្ញើសារជូនដំណឹងទៅ Admin និងទុករង់ចាំ Approve)
+// API អតិថិជនចុចបញ្ជាក់ថាបានបង់ប្រាក់ (ត្រឹមតែរក្សាទុកជា PENDING ក្នុង Database - មិនទាន់ផ្ញើសារទៅ Telegram ទេ)
 app.post('/api/confirm-payment', async (req, res) => {
     try {
         const { tran_id } = req.body;
-
         let orderInfo = await Order.findOne({ orderId: tran_id });
 
         if (orderInfo) {
-            orderInfo.status = 'PENDING'; // រក្សាទុកជា Pending ដើម្បីឱ្យ Admin ពិនិត្យ
+            orderInfo.status = 'PENDING';
             await orderInfo.save();
-
-            let orderText = "🔔 *មានការបញ្ជាទិញថ្មី (រង់ចាំការផ្ទៀងផ្ទាត់លុយ)!*\n\n";
-            orderText += `📦 *កូដបញ្ជាទិញ:* \`${orderInfo.orderId}\`\n\n`;
-
-            orderInfo.cart.forEach((item, index) => {
-                orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
-            });
-            
-            orderText += `\n👤 *ឈ្មោះអ្នកទិញ:* ${orderInfo.name || 'មិនមានឈ្មោះ'}`;
-            orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
-            orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
-            orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName} ($${orderInfo.shippingFee})`;
-            orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
-            orderText += `\n🏦 *គណនី ABA:* SRY VANDY (500258373)`;
-            orderText += `\n⏳ *ស្ថានភាព:* កំពុងរង់ចាំ Admin ពិនិត្យផ្ទៀងផ្ទាត់ការបង់ប្រាក់ក្នុង Admin Panel`;
-
-            await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
-                chat_id: TELEGRAM_CHAT_ID,
-                text: orderText,
-                parse_mode: 'Markdown'
-            });
-
-            return res.json({ success: true, message: 'Order submitted for verification' });
+            // 🛑 កន្លែងនេះមិនមានការផ្ញើសារទៅ Telegram ទេ ដើម្បីរង់ចាំ Admin ពិនិត្យសិន!
+            return res.json({ success: true, message: 'Order submitted and waiting for admin approval.' });
         }
 
         res.json({ success: false, message: 'Order not found' });
@@ -220,35 +198,61 @@ app.get('/api/admin/pending-orders', async (req, res) => {
     }
 });
 
-// API Admin ចុច Approve ឬ Reject
+// API Admin ចុច Approve ឬ Reject (ຖ້າ Approve 0 ទើបផ្ញើសារចូល Telegram និងកាត់ស្តុក)
 app.post('/api/admin/order-action', async (req, res) => {
     try {
         const { orderId, action } = req.body; // action: 'APPROVE' ឬ 'REJECT'
-        let order = await Order.findOne({ orderId: orderId });
+        let orderInfo = await Order.findOne({ orderId: orderId });
         
-        if (!order) return res.json({ success: false, message: 'រកមិនឃើញ Order នេះទេ។' });
+        if (!orderInfo) return res.json({ success: false, message: 'រកមិនឃើញ Order នេះទេ។' });
 
         if (action === 'APPROVE') {
-            order.status = 'PAID';
-            await order.save();
+            orderInfo.status = 'PAID';
+            await orderInfo.save();
 
-            // កាត់ស្តុកអចិន្ត្រៃយ៍ពេល Admin ចុច Approve ថាមានលុយចូលពិតប្រាកដ
-            for (let cartItem of order.cart) {
+            // កាត់ស្តុកអចិន្ត្រៃយ៍ពេល Admin ចុច Approve
+            for (let cartItem of orderInfo.cart) {
                 let product = await Product.findOne({ id: cartItem.id });
                 if (product) {
                     product.stock = Math.max(0, product.stock - cartItem.quantity);
                     await product.save();
                 }
             }
-            return res.json({ success: true, message: 'បានអនុម័ត (Approve) ការបញ្ជាទិញជោគជ័យ និងកាត់ស្តុកស្របច្បាប់!' });
-        } else if (action === 'REJECT') {
-            order.status = 'REJECTED';
-            await order.save();
-            return res.json({ success: true, message: 'បានបដិសេធ (Reject) ការបញ្ជាទិញនេះរួចរាល់!' });
+
+            // 🚀 ផ្ញើសារទៅ Telegram Bot របស់បង ទីបំផុត! (ព្រោះ Admin អនុម័តយល់ព្រមរួចរាល់ហើយ)
+            let orderText = "🎉 *ការបញ្ជាទិញជោគជ័យ (Admin បាន Approve រួចរាល់)!*\n\n";
+            orderText += `📦 *កូដបញ្ជាទិញ:* \`${orderInfo.orderId}\`\n\n`;
+
+            orderInfo.cart.forEach((item, index) => {
+                orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
+            });
+            
+            orderText += `\n👤 *ឈ្មោះអ្នកទិញ:* ${orderInfo.name || 'មិនមានឈ្មោះ'}`;
+            orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
+            orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
+            orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName} ($${orderInfo.shippingFee})`;
+            orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
+            orderText += `\n🏦 *គណនី ABA:* SRY VANDY (500258373)`;
+            orderText += `\n✅ *ស្ថានភាព:* បានពិនិត្យនិងផ្ទៀងផ្ទាត់លុយរួចរាល់ (កាត់ស្តុកក្នុង Database ហើយ)`;
+
+            await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
+                chat_id: TELEGRAM_CHAT_ID,
+                text: orderText,
+                parse_mode: 'Markdown'
+            });
+
+            return res.json({ success: true, message: 'បាន Approve និងផ្ញើសារទៅ Telegram រួចរាល់!' });
+        } 
+        else if (action === 'REJECT') {
+            orderInfo.status = 'REJECTED';
+            await orderInfo.save();
+            // 🛑 បើ Reject គឺមិនបាច់ផ្ញើសារអ្វីទៅ Telegram ទេ
+            return res.json({ success: true, message: 'បានបដិសេធ (Reject) ការបញ្ជាទិញនេះ!' });
         }
 
         res.json({ success: false, message: 'Action មិនត្រឹមត្រូវ។' });
     } catch (error) {
+        console.error("Order Action Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 });

@@ -108,7 +108,31 @@ app.post('/api/confirm-payment', async (req, res) => {
     }
 });
 
-// Admin APIs
+// ==========================================
+// 🛠️ ADMIN APIs
+// ==========================================
+
+// API សម្រាប់ Admin កែប្រែព័ត៌មានផលិតផល (ឈ្មោះ តម្លៃ ស្តុកសរុប និងរូបភាព)
+app.put('/api/admin/update-product', async (req, res) => {
+    try {
+        const { id, name, price, stock, image } = req.body;
+        let product = await Product.findOne({ id: id });
+        
+        if (!product) return res.json({ success: false, message: 'រកមិនឃើញផលិតផលទេ' });
+
+        product.name = name;
+        product.price = Number(price);
+        product.stock = Number(stock);
+        product.image = image;
+
+        await product.save();
+        res.json({ success: true, message: 'បានកែប្រែផលិតផលជោគជ័យ!' });
+    } catch (error) {
+        res.status(500).json({ success: false, message: error.message });
+    }
+});
+
+// API សម្រាប់កែស្តុកដាច់ដោយឡែក (រក្សាទុកเผื่อ compatibility)
 app.put('/api/admin/update-stock', async (req, res) => {
     try {
         const { id, stock } = req.body;

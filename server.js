@@ -17,13 +17,14 @@ mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB Atlas successfully!'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// 🟢 Schema សម្រាប់ផលិតផលនិងស្តុក
+// 🟢 Schema សម្រាប់ផលិតផល (បន្ថែម colors សម្រាប់ជម្រើសពណ៌ផ្សេងៗ)
 const productSchema = new mongoose.Schema({
     id: Number,
     name: String,
     price: Number,
     stock: Number,
-    image: String
+    image: String,
+    colors: Array // ឧទាហរណ៍: [{colorName: "ផ្កាឈូក", image: "..."}, {colorName: "ស", image: "..."}]
 });
 const Product = mongoose.model('Product', productSchema);
 
@@ -38,25 +39,39 @@ const orderSchema = new mongoose.Schema({
     shippingFee: Number,
     shippingName: String,
     cart: Array,
-    status: String, // PENDING, PAID, REJECTED
+    status: String, 
     date: String
 });
 const Order = mongoose.model('Order', orderSchema);
 
-// 🟢 បញ្ចូលទិន្នន័យផលិតផលដើមចូល Database ប្រសិនបើទទេ
+// 🟢 បញ្ចូលទិន្នន័យផលិតផលដើម (ជាមួយជម្រើសពណ៌ស្រាប់)
 async function seedProducts() {
     try {
         let count = await Product.countDocuments();
         if (count === 0) {
             await Product.insertMany([
-                { id: 1, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/0NrGyrGt/858535232-122143330293104345-8003998162307616562-n.jpg" },
-                { id: 2, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/HkY4F6rY/858998600-122143328523104345-9154920380344446311-n.jpg" },
-                { id: 3, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/T1R3T7By/859090829-122143330215104345-4641336911256672944-n.jpg" },
-                { id: 4, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/k4CnyYJL/859396177-122143328499104345-4898313489564552661-n.jpg" },
-                { id: 5, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/kG1qqnQn/859396179-122143328535104345-7526329722242687048-n.jpg" },
-                { id: 6, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/sXKR4V0f/859784793-122143328547104345-5525957976114747478-n.jpg" },
-                { id: 7, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/brJf6KKV/859980286-122143330197104345-5978106523108566575-n.jpg" },
-                { id: 8, name: "អាវយឺត FREE SIZE", price: 3.75, stock: 1, image: "https://i.postimg.cc/XqzStsWV/863325406-122143330281104345-4670333600097983632-n.jpg" }
+                { 
+                    id: 1, 
+                    name: "អាវយឺត SNOOPY FREE SIZE", 
+                    price: 3.75, 
+                    stock: 5, 
+                    image: "https://i.postimg.cc/0NrGyrGt/858535232-122143330293104345-8003998162307616562-n.jpg",
+                    colors: [
+                        { colorName: "ផ្កាឈូក", image: "https://i.postimg.cc/sXKR4V0f/859784793-122143328547104345-5525957976114747478-n.jpg" },
+                        { colorName: "លឿងខ្ចី", image: "https://i.postimg.cc/HkY4F6rY/858998600-122143328523104345-9154920380344446311-n.jpg" }
+                    ]
+                },
+                { 
+                    id: 2, 
+                    name: "អាវយឺត 16 SMILE FREE SIZE", 
+                    price: 3.75, 
+                    stock: 5, 
+                    image: "https://i.postimg.cc/T1R3T7By/859090829-122143330215104345-4641336911256672944-n.jpg",
+                    colors: [
+                        { colorName: "ស", image: "https://i.postimg.cc/T1R3T7By/859090829-122143330215104345-4641336911256672944-n.jpg" },
+                        { colorName: "ផ្កាឈូកខ្ចី", image: "https://i.postimg.cc/k4CnyYJL/859396177-122143328499104345-4898313489564552661-n.jpg" }
+                    ]
+                }
             ]);
             console.log('Default products seeded successfully!');
         }
@@ -73,7 +88,6 @@ app.get('/', (req, res) => {
 const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';
 const TELEGRAM_CHAT_ID = '7488093549';
 
-// API សម្រាប់ Frontend ទាញយកស្តុកចុងក្រោយពី Database
 app.get('/api/products', async (req, res) => {
     try {
         let products = await Product.find({});
@@ -83,7 +97,6 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// API ទទួលការបញ្ជាទិញ
 app.post('/api/create-order', async (req, res) => {
     try {
         let { telegramId, orderId, amount, name, phone, address, shippingFee, shippingName, cart } = req.body;
@@ -104,20 +117,12 @@ app.post('/api/create-order', async (req, res) => {
         });
 
         await newOrder.save();
-
-        res.json({
-            success: true,
-            tran_id: orderId,
-            amount: amount
-        });
-
+        res.json({ success: true, tran_id: orderId, amount: amount });
     } catch (error) {
-        console.error("Server Error:", error.message);
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// API ទាញយកប្រវត្តិទិញតាម Telegram ID
 app.get('/api/orders/:telegramId', async (req, res) => {
     try {
         let orders = await Order.find({ telegramId: req.params.telegramId }).sort({ _id: -1 });
@@ -127,36 +132,27 @@ app.get('/api/orders/:telegramId', async (req, res) => {
     }
 });
 
-// API អតិថិជនចុចបញ្ជាក់ថាបានបង់ប្រាក់ (ត្រឹមតែរក្សាទុកជា PENDING ក្នុង Database - មិនទាន់ផ្ញើសារទៅ Telegram ទេ)
 app.post('/api/confirm-payment', async (req, res) => {
     try {
         const { tran_id } = req.body;
         let orderInfo = await Order.findOne({ orderId: tran_id });
-
         if (orderInfo) {
             orderInfo.status = 'PENDING';
             await orderInfo.save();
-            // 🛑 កន្លែងនេះមិនមានការផ្ញើសារទៅ Telegram ទេ ដើម្បីរង់ចាំ Admin ពិនិត្យសិន!
-            return res.json({ success: true, message: 'Order submitted and waiting for admin approval.' });
+            return res.json({ success: true, message: 'Order submitted.' });
         }
-
         res.json({ success: false, message: 'Order not found' });
     } catch (error) {
-        console.error("Confirmation Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 });
 
-// ==========================================
-// 🛠️ ADMIN API ROUTES (សម្រាប់គ្រប់គ្រងស្តុក និងផលិតផល)
-// ==========================================
-
+// Admin APIs
 app.put('/api/admin/update-stock', async (req, res) => {
     try {
         const { id, stock } = req.body;
         let product = await Product.findOne({ id: id });
         if (!product) return res.json({ success: false, message: 'រកមិនឃើញផលិតផលទេ' });
-
         product.stock = stock;
         await product.save();
         res.json({ success: true, message: 'Updated successfully' });
@@ -167,11 +163,11 @@ app.put('/api/admin/update-stock', async (req, res) => {
 
 app.post('/api/admin/add-product', async (req, res) => {
     try {
-        const { id, name, price, stock, image } = req.body;
+        const { id, name, price, stock, image, colors } = req.body;
         let exist = await Product.findOne({ id: id });
         if (exist) return res.json({ success: false, message: 'ID ផលិតផលនេះមានរួចហើយ!' });
 
-        let newProd = new Product({ id, name, price, stock, image });
+        let newProd = new Product({ id, name, price, stock, image, colors: colors || [] });
         await newProd.save();
         res.json({ success: true, message: 'Product added successfully' });
     } catch (error) {
@@ -198,19 +194,16 @@ app.get('/api/admin/pending-orders', async (req, res) => {
     }
 });
 
-// API Admin ចុច Approve ឬ Reject (ຖ້າ Approve 0 ទើបផ្ញើសារចូល Telegram និងកាត់ស្តុក)
 app.post('/api/admin/order-action', async (req, res) => {
     try {
-        const { orderId, action } = req.body; // action: 'APPROVE' ឬ 'REJECT'
+        const { orderId, action } = req.body;
         let orderInfo = await Order.findOne({ orderId: orderId });
-        
         if (!orderInfo) return res.json({ success: false, message: 'រកមិនឃើញ Order នេះទេ។' });
 
         if (action === 'APPROVE') {
             orderInfo.status = 'PAID';
             await orderInfo.save();
 
-            // កាត់ស្តុកអចិន្ត្រៃយ៍ពេល Admin ចុច Approve
             for (let cartItem of orderInfo.cart) {
                 let product = await Product.findOne({ id: cartItem.id });
                 if (product) {
@@ -219,21 +212,16 @@ app.post('/api/admin/order-action', async (req, res) => {
                 }
             }
 
-            // 🚀 ផ្ញើសារទៅ Telegram Bot របស់បង ទីបំផុត! (ព្រោះ Admin អនុម័តយល់ព្រមរួចរាល់ហើយ)
             let orderText = "🎉 *ការបញ្ជាទិញជោគជ័យ (Admin បាន Approve រួចរាល់)!*\n\n";
             orderText += `📦 *កូដបញ្ជាទិញ:* \`${orderInfo.orderId}\`\n\n`;
-
             orderInfo.cart.forEach((item, index) => {
-                orderText += `${index + 1}. ${item.name} ($${item.price} x ${item.quantity})\n`;
+                orderText += `${index + 1}. ${item.name} ${item.selectedColor ? `(ពណ៌: ${item.selectedColor})` : ''} ($${item.price} x ${item.quantity})\n`;
             });
-            
             orderText += `\n👤 *ឈ្មោះអ្នកទិញ:* ${orderInfo.name || 'មិនមានឈ្មោះ'}`;
             orderText += `\n📞 *លេខទូរសព្ទ:* ${orderInfo.phone}`;
             orderText += `\n📍 *ទីតាំង:* ${orderInfo.address}`;
             orderText += `\n🚚 *សេវាដឹកជញ្ជូន:* ${orderInfo.shippingName} ($${orderInfo.shippingFee})`;
             orderText += `\n💰 *ទឹកប្រាក់សរុប:* **$${orderInfo.amount}**`;
-            orderText += `\n🏦 *គណនី ABA:* SRY VANDY (500258373)`;
-            orderText += `\n✅ *ស្ថានភាព:* បានពិនិត្យនិងផ្ទៀងផ្ទាត់លុយរួចរាល់ (កាត់ស្តុកក្នុង Database ហើយ)`;
 
             await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 chat_id: TELEGRAM_CHAT_ID,
@@ -246,13 +234,11 @@ app.post('/api/admin/order-action', async (req, res) => {
         else if (action === 'REJECT') {
             orderInfo.status = 'REJECTED';
             await orderInfo.save();
-            // 🛑 បើ Reject គឺមិនបាច់ផ្ញើសារអ្វីទៅ Telegram ទេ
             return res.json({ success: true, message: 'បានបដិសេធ (Reject) ការបញ្ជាទិញនេះ!' });
         }
 
         res.json({ success: false, message: 'Action មិនត្រឹមត្រូវ។' });
     } catch (error) {
-        console.error("Order Action Error:", error);
         res.status(500).json({ success: false, message: error.message });
     }
 });

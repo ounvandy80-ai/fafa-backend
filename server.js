@@ -10,25 +10,23 @@ app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// 🟢 ភ្ជាប់ទៅកាន់ MongoDB Atlas
 const MONGO_URI = "mongodb+srv://ounvandy80_db_user:Ounvandy25012003@cluster0.v5i9ayl.mongodb.net/fafa_shop?retryWrites=true&w=majority";
 
 mongoose.connect(MONGO_URI)
     .then(() => console.log('Connected to MongoDB Atlas successfully!'))
     .catch(err => console.error('MongoDB connection error:', err));
 
-// 🟢 Schema សម្រាប់ផលិតផល (បន្ថែម colors សម្រាប់ជម្រើសពណ៌ផ្សេងៗ)
+// 🟢 Schema សម្រាប់ផលិតផល (colors ឥឡូវមាន stock ផ្ទាល់ខ្លួន)
 const productSchema = new mongoose.Schema({
     id: Number,
     name: String,
     price: Number,
-    stock: Number,
+    stock: Number, // ស្តុកសរុប
     image: String,
-    colors: Array // ឧទាហរណ៍: [{colorName: "ផ្កាឈូក", image: "..."}, {colorName: "ស", image: "..."}]
+    colors: Array // [{ colorName: "ពណ៌ខ្មៅ", image: "...", stock: 1 }, { colorName: "ពណ៌ផ្កាឈូក", image: "...", stock: 2 }]
 });
 const Product = mongoose.model('Product', productSchema);
 
-// 🟢 Schema សម្រាប់ប្រវត្តិការបញ្ជាទិញ
 const orderSchema = new mongoose.Schema({
     telegramId: String,
     orderId: String,
@@ -43,43 +41,6 @@ const orderSchema = new mongoose.Schema({
     date: String
 });
 const Order = mongoose.model('Order', orderSchema);
-
-// 🟢 បញ្ចូលទិន្នន័យផលិតផលដើម (ជាមួយជម្រើសពណ៌ស្រាប់)
-async function seedProducts() {
-    try {
-        let count = await Product.countDocuments();
-        if (count === 0) {
-            await Product.insertMany([
-                { 
-                    id: 1, 
-                    name: "អាវយឺត SNOOPY FREE SIZE", 
-                    price: 3.75, 
-                    stock: 5, 
-                    image: "https://i.postimg.cc/0NrGyrGt/858535232-122143330293104345-8003998162307616562-n.jpg",
-                    colors: [
-                        { colorName: "ផ្កាឈូក", image: "https://i.postimg.cc/sXKR4V0f/859784793-122143328547104345-5525957976114747478-n.jpg" },
-                        { colorName: "លឿងខ្ចី", image: "https://i.postimg.cc/HkY4F6rY/858998600-122143328523104345-9154920380344446311-n.jpg" }
-                    ]
-                },
-                { 
-                    id: 2, 
-                    name: "អាវយឺត 16 SMILE FREE SIZE", 
-                    price: 3.75, 
-                    stock: 5, 
-                    image: "https://i.postimg.cc/T1R3T7By/859090829-122143330215104345-4641336911256672944-n.jpg",
-                    colors: [
-                        { colorName: "ស", image: "https://i.postimg.cc/T1R3T7By/859090829-122143330215104345-4641336911256672944-n.jpg" },
-                        { colorName: "ផ្កាឈូកខ្ចី", image: "https://i.postimg.cc/k4CnyYJL/859396177-122143328499104345-4898313489564552661-n.jpg" }
-                    ]
-                }
-            ]);
-            console.log('Default products seeded successfully!');
-        }
-    } catch (err) {
-        console.error('Error seeding products:', err);
-    }
-}
-seedProducts();
 
 app.get('/', (req, res) => {
     res.send('FAFA Clothing Backend with MongoDB is running successfully!');
@@ -204,15 +165,23 @@ app.post('/api/admin/order-action', async (req, res) => {
             orderInfo.status = 'PAID';
             await orderInfo.save();
 
+            // កាត់ស្តុកសរុប និងស្តុកតាមពណ៌នីមួយៗ
             for (let cartItem of orderInfo.cart) {
                 let product = await Product.findOne({ id: cartItem.id });
                 if (product) {
                     product.stock = Math.max(0, product.stock - cartItem.quantity);
+                    
+                    // បើមានការរើសពណ៌ ឱ្យវាhកាត់ស្តុកក្នុង array ពណ៌នោះផង
+                    if (cartItem.selectedColor && product.colors) {
+                        let colorObj = product.colors.find(c => c.colorName === cartItem.selectedColor);
+                        if (colorObj) {
+                            colorObj.stock = Math.max(0, (colorObj.stock || 0) - cartItem.quantity);
+                        }
+                    }
                     await product.save();
                 }
             }
 
-            // 🚀 ដាក់ try...catch ការពារពេលដាច់បណ្ដាញ Telegram
             try {
                 let orderText = "🎉 *ការបញ្ជាទិញជោគជ័យ (Admin បាន Approve រួចរាល់)!*\n\n";
                 orderText += `📦 *កូដបញ្ជាទិញ:* \`${orderInfo.orderId}\`\n\n`;
@@ -234,7 +203,7 @@ app.post('/api/admin/order-action', async (req, res) => {
                 console.error("Telegram Send Error (Ignored):", telegramErr.message);
             }
 
-            return res.json({ success: true, message: 'បាន Approve និងកាត់ស្តុកជោគជ័យ!' });
+            return res.json({ success: true, message: 'បាន Approve និងកាត់ស្តុកតាមពណ៌ជោគជ័យ!' });
         } 
         else if (action === 'REJECT') {
             orderInfo.status = 'REJECTED';

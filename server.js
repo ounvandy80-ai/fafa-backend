@@ -74,7 +74,7 @@ const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';
 const TELEGRAM_CHAT_ID = '7488093549';
 
 // ⚙️ Facebook Messenger Configuration
-const FB_PAGE_ACCESS_TOKEN = 'EAAYLrrD3aaMBS8W7Lvkdyq7cx4KIJJmGgE4NhGbeBjbKuvhQaRkpAWT89SipEM8pqlaOQByEm5t7KmEn2DlIaRJIAiroK4sZCY5sRWAAcl0yMAtegljrdskkvjmusbqb2ePhuZBN4NiEZBCuvcDgab1gunumJq6oc51WWYmoNQ3kwA6ofHpkJpuzvQC1nMukIj8bekCzQZDZD';
+const FB_PAGE_ACCESS_TOKEN = 'EAAYLrrD3aaMBSxkJ3sorf5W3zOwZAqcyZBZCSnkpI7mPMhXYrQydoTCt81GmqVTVNjaYqQtfoKoTeeoXv0QCTgqEYrjWah6joC1sNnu0dHYlZCeNrWLb48kigfMGzhJYJIeTCQSFNiAZBJA8TIZA4L36G7SPzA0KbYIrvxvsuhG8mgWtfCUaiao82WjQanRpJfCVKEtmndDQZDZD';
 const FB_VERIFY_TOKEN = 'fafa_clothing_verify_token_123';
 
 app.get('/api/products', async (req, res) => {

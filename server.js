@@ -459,4 +459,7 @@ app.post('/webhook/facebook', async (req, res) => {
         console.error("Error handling Facebook webhook:", error);
         res.status(500).send('Internal Server Error');
     }
+    const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`Server is running on port ${PORT}`);
 });

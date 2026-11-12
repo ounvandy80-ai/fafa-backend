@@ -33,7 +33,7 @@ const orderSchema = new mongoose.Schema({
     name: String,
     phone: String,
     address: String,
-    location: Object, // 📍 រក្សាទុកទីតាំង GPS (Latitude, Longitude)
+    location: Object,
     shippingFee: Number,
     shippingName: String,
     cart: Array,
@@ -42,7 +42,6 @@ const orderSchema = new mongoose.Schema({
 });
 const Order = mongoose.model('Order', orderSchema);
 
-// 👤 Schema សម្រាប់គ្រប់គ្រង User និងสถานະ Block
 const userSchema = new mongoose.Schema({
     telegramId: String,
     name: String,
@@ -52,13 +51,12 @@ const userSchema = new mongoose.Schema({
 });
 const User = mongoose.model('User', userSchema);
 
-// 💬 Schema សម្រាប់រក្សាទុកសារសន្ទនា Omnichannel Chat (FB & Telegram)
 const chatMessageSchema = new mongoose.Schema({
-    platform: String, // 'facebook' ឬ 'telegram'
-    userId: String,   // PSID របស់ FB ឬ Chat ID របស់ Telegram
-    name: String,     // ឈ្មោះអតិថិជន
+    platform: String,
+    userId: String,
+    name: String,
     messages: [{
-        sender: String, // 'user' ឬ 'admin'
+        sender: String,
         text: String,
         time: String
     }],
@@ -73,7 +71,6 @@ app.get('/', (req, res) => {
 const TELEGRAM_BOT_TOKEN = '9071654545:AAG6Ur9Nt2k-TQiEhlPu65Ib1gbmdh-7sgs';
 const TELEGRAM_CHAT_ID = '7488093549';
 
-// ⚙️ Facebook Messenger Configuration
 const FB_PAGE_ACCESS_TOKEN = 'EAAYLrrD3aaMBSZCI04wb4oBufcNNwzJyLTQu6bRyUf5HfZCZCRu4n1chYxt5QQliMZAjwrjUnkfKLZAZCyCt2oUAB4OLgdQGhsLC1vk3NzpZA0Il44QlYwjGAjVDtkGWlbFNJpz7UUkFKo7PhHWDg18x7Auevv2ZCgXkalZAXKfKGRgkPk6TLlpZAa0XavG62DG6ZBdISIEZBfnLKQZDZD';
 const FB_VERIFY_TOKEN = 'fafa_clothing_verify_token_123';
 
@@ -86,7 +83,6 @@ app.get('/api/products', async (req, res) => {
     }
 });
 
-// 🟢 ពិនិត្យសិទ្ធិ User ពេលបើក App និងាប់យករបាយការណ៍ Online
 app.post('/api/user/ping', async (req, res) => {
     try {
         let { telegramId, name, phone } = req.body;
@@ -164,10 +160,6 @@ app.post('/api/confirm-payment', async (req, res) => {
         res.status(500).json({ success: false, message: error.message });
     }
 });
-
-// ==========================================
-// 🛠️ ADMIN APIs (Advanced Management)
-// ==========================================
 
 app.get('/api/admin/users', async (req, res) => {
     try {
@@ -321,11 +313,6 @@ app.post('/api/admin/order-action', async (req, res) => {
     }
 });
 
-// ==========================================
-// 💬 OMNICHANNEL LIVE CHAT APIs (FB & Telegram)
-// ==========================================
-
-// 1. ទាញយកបញ្ជីរាយឈ្មោះសន្ទនាទាំងអស់សម្រាប់ Admin Panel
 app.get('/api/admin/chats', async (req, res) => {
     try {
         let conversations = await ChatConversation.find({}).sort({ lastTime: -1 });
@@ -335,7 +322,6 @@ app.get('/api/admin/chats', async (req, res) => {
     }
 });
 
-// 2. Admin ផ្ញើសារឆ្លើយតបទៅកាន់អតិថិជន (FB Messenger ឬ Telegram)
 app.post('/api/admin/chats/send', async (req, res) => {
     try {
         let { platform, userId, text } = req.body;
@@ -346,20 +332,17 @@ app.post('/api/admin/chats/send', async (req, res) => {
         let timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
         if (platform === 'facebook') {
-            // ส่งข้อความออกไปหา Facebook Messenger ຜ່ານ Graph API
             await axios.post(`https://graph.facebook.com/v18.0/me/messages?access_token=${FB_PAGE_ACCESS_TOKEN}`, {
                 recipient: { id: userId },
                 message: { text: text }
             });
         } else if (platform === 'telegram') {
-            // ส่งข้อความออกไปหา Telegram Bot ຜ່ານ Telegram API
             await axios.post(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
                 chat_id: userId,
                 text: text
             });
         }
 
-        // บันทึกลงฐานข้อมูล ChatConversation
         let conv = await ChatConversation.findOne({ platform, userId });
         if (conv) {
             conv.messages.push({ sender: 'admin', text, time: timeStr });
@@ -374,7 +357,6 @@ app.post('/api/admin/chats/send', async (req, res) => {
     }
 });
 
-// 3. Facebook Messenger Webhook (Verify GET)
 app.get('/webhook/facebook', (req, res) => {
     let mode = req.query['hub.mode'];
     let token = req.query['hub.verify_token'];
@@ -387,7 +369,6 @@ app.get('/webhook/facebook', (req, res) => {
     }
 });
 
-// 4. Facebook Messenger Webhook (Receive POST - Updated for both Standard & Test Payloads)
 app.post('/webhook/facebook', async (req, res) => {
     try {
         let body = req.body;
@@ -396,7 +377,6 @@ app.post('/webhook/facebook', async (req, res) => {
         if (body.object === 'page') {
             for (let entry of body.entry) {
                 
-                // 1. ករណីសារពិតប្រាកដពី Messenger (Standard Live Message)
                 if (entry.messaging && entry.messaging.length > 0) {
                     for (let webhookEvent of entry.messaging) {
                         let sender_psid = webhookEvent.sender && webhookEvent.sender.id;
@@ -404,7 +384,7 @@ app.post('/webhook/facebook', async (req, res) => {
 
                         if (sender_psid && incomingText) {
                             let timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                            let customerName = 'Facebook User'; // ឬទាញយកឈ្មោះពី Facebook Graph API
+                            let customerName = 'Facebook User';
 
                             let conv = await ChatConversation.findOne({ platform: 'facebook', userId: sender_psid });
                             if (!conv) {
@@ -423,7 +403,6 @@ app.post('/webhook/facebook', async (req, res) => {
                     }
                 }
 
-                // 2. ករណី Test Payload / Changes Field (ដែលបងមានស្រាប់)
                 if (entry.changes && entry.changes.length > 0) {
                     for (let change of entry.changes) {
                         if (change.field === 'messages' && change.value) {
@@ -459,7 +438,10 @@ app.post('/webhook/facebook', async (req, res) => {
         console.error("Error handling Facebook webhook:", error);
         res.status(500).send('Internal Server Error');
     }
-    const PORT = process.env.PORT || 3000;
+});
+
+// 🚀 Start Server (នៅខាងក្រោមបង្អស់ដាច់ខាច់)
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);
 });

@@ -395,7 +395,35 @@ app.post('/webhook/facebook', async (req, res) => {
 
         if (body.object === 'page') {
             for (let entry of body.entry) {
-                // A. ករណី Test Payload ឬ Messages Field ថ្មី (changes)
+                
+                // 1. ករណីសារពិតប្រាកដពី Messenger (Standard Live Message)
+                if (entry.messaging && entry.messaging.length > 0) {
+                    for (let webhookEvent of entry.messaging) {
+                        let sender_psid = webhookEvent.sender && webhookEvent.sender.id;
+                        let incomingText = webhookEvent.message && webhookEvent.message.text;
+
+                        if (sender_psid && incomingText) {
+                            let timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                            let customerName = 'Facebook User'; // ឬទាញយកឈ្មោះពី Facebook Graph API
+
+                            let conv = await ChatConversation.findOne({ platform: 'facebook', userId: sender_psid });
+                            if (!conv) {
+                                conv = new ChatConversation({
+                                    platform: 'facebook',
+                                    userId: sender_psid,
+                                    name: customerName,
+                                    messages: [],
+                                    lastTime: timeStr
+                                });
+                            }
+                            conv.messages.push({ sender: 'user', text: incomingText, time: timeStr });
+                            conv.lastTime = timeStr;
+                            await conv.save();
+                        }
+                    }
+                }
+
+                // 2. ករណី Test Payload / Changes Field (ដែលបងមានស្រាប់)
                 if (entry.changes && entry.changes.length > 0) {
                     for (let change of entry.changes) {
                         if (change.field === 'messages' && change.value) {
@@ -416,90 +444,19 @@ app.post('/webhook/facebook', async (req, res) => {
                                     lastTime: timeStr
                                 });
                             }
-                            conv.name = customerName;
                             conv.messages.push({ sender: 'user', text: incomingText, time: timeStr });
                             conv.lastTime = timeStr;
                             await conv.save();
                         }
                     }
                 }
-
-                // B. ករណីសារធម្មតាពីអតិថិជនពិតប្រាកដ (messaging array)
-                if (entry.messaging && entry.messaging.length > 0) {
-                    let webhook_event = entry.messaging[0];
-                    let sender_psid = webhook_event.sender.id;
-
-                    if (webhook_event.message && webhook_event.message.text) {
-                        let incomingText = webhook_event.message.text;
-                        let timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-                        let customerName = 'Facebook Customer';
-                        try {
-                            let profileRes = await axios.get(`https://graph.facebook.com/v18.0/${sender_psid}?fields=first_name,last_name&access_token=${FB_PAGE_ACCESS_TOKEN}`);
-                            if (profileRes.data && profileRes.data.first_name) {
-                                customerName = `${profileRes.data.first_name} ${profileRes.data.last_name || ''}`;
-                            }
-                        } catch (e) {
-                            console.error('Fetch FB Profile error:', e.message);
-                        }
-
-                        let conv = await ChatConversation.findOne({ platform: 'facebook', userId: sender_psid });
-                        if (!conv) {
-                            conv = new ChatConversation({
-                                platform: 'facebook',
-                                userId: sender_psid,
-                                name: customerName,
-                                messages: [],
-                                lastTime: timeStr
-                            });
-                        }
-                        conv.name = customerName;
-                        conv.messages.push({ sender: 'user', text: incomingText, time: timeStr });
-                        conv.lastTime = timeStr;
-                        await conv.save();
-                    }
-                }
             }
-            return res.status(200).send('EVENT_RECEIVED');
+            res.status(200).send('EVENT_RECEIVED');
+        } else {
+            res.sendStatus(404);
         }
-        res.sendStatus(404);
-    } catch (err) {
-        console.error("FB Webhook Error:", err.message);
-        res.sendStatus(500);
-    }
-});
-
-// 5. Telegram Webhook / Message Listener
-app.post('/webhook/telegram', async (req, res) => {
-    try {
-        let update = req.body;
-        if (update.message && update.message.text) {
-            let chatId = update.message.chat.id.toString();
-            let text = update.message.text;
-            let firstName = update.message.from.first_name || 'Telegram User';
-            let timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-
-            let conv = await ChatConversation.findOne({ platform: 'telegram', userId: chatId });
-            if (!conv) {
-                conv = new ChatConversation({
-                    platform: 'telegram',
-                    userId: chatId,
-                    name: firstName,
-                    messages: [],
-                    lastTime: timeStr
-                });
-            }
-            conv.name = firstName;
-            conv.messages.push({ sender: 'user', text: text, time: timeStr });
-            conv.lastTime = timeStr;
-            await conv.save();
-        }
-        res.sendStatus(200);
     } catch (error) {
-        console.error('Telegram Webhook Error:', error.message);
-        res.sendStatus(500);
+        console.error("Error handling Facebook webhook:", error);
+        res.status(500).send('Internal Server Error');
     }
 });
-
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
